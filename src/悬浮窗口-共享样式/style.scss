@@ -1,0 +1,144 @@
+// 使用 BEM 命名规范避免与酒馆样式冲突
+// 禁止使用 tailwindcss，使用酒馆原有的 CSS 变量和类名
+
+.floating-window {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  width: 320px;
+  max-height: 80vh;
+  z-index: 9999;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--SmartThemeBlurTintColor, rgba(40, 40, 40, 0.9));
+    border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+    cursor: move;
+    user-select: none;
+
+    &-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--SmartThemeBodyColor, #e0e0e0);
+      font-weight: 600;
+      font-size: 14px;
+
+      i {
+        color: var(--SmartThemeQuoteColor, #6ca0dc);
+      }
+    }
+
+    &-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+
+  &__btn-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--SmartThemeBodyColor, #e0e0e0);
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    i {
+      font-size: 12px;
+    }
+  }
+
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__section {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+
+    &-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--SmartThemeEmColor, #aaa);
+      margin: 0 0 10px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  }
+
+  &__actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+
+    .menu_button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+
+      i {
+        font-size: 12px;
+      }
+    }
+  }
+
+  &__info {
+    font-size: 13px;
+    color: var(--SmartThemeBodyColor, #ccc);
+    line-height: 1.6;
+
+    p {
+      margin: 0;
+    }
+  }
+
+  &__textarea {
+    width: 100%;
+    height: 80px;
+    resize: none;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  &__submit {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    i {
+      font-size: 12px;
+    }
+  }
+}

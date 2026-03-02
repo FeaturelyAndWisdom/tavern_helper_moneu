@@ -1,14 +1,33 @@
 <template>
-  <div v-if="isActive" class="waveform-chart">
+  <div class="waveform-chart">
     <div class="waveform-chart__header">
       <span class="waveform-chart__title">指令波形</span>
-      <span class="waveform-chart__time">{{ formatTime(currentTime) }} / {{ formatTime(globalTime) }}</span>
+      <span class="waveform-chart__header-right">
+        <button
+          v-if="hasDisplayData && !isActive"
+          class="waveform-chart__replay-btn"
+          title="重播上次指令"
+          @click="$emit('replay')"
+          @mouseenter="replayHover = true"
+          @mouseleave="replayHover = false"
+        >
+          <i class="fas fa-redo-alt"></i>
+          <span v-if="replayHover" class="waveform-chart__replay-tooltip">重播上次指令</span>
+        </button>
+        <span v-if="hasDisplayData" class="waveform-chart__time">
+          <span v-if="isActive" class="waveform-chart__status-dot waveform-chart__status-dot--active"></span>
+          {{ formatTime(displayTime) }} / {{ formatTime(displayGlobalTime) }}
+        </span>
+      </span>
     </div>
     <div ref="chartContainer" class="waveform-chart__canvas-container">
       <canvas ref="canvasRef" class="waveform-chart__canvas"></canvas>
+      <div v-if="!hasDisplayData" class="waveform-chart__empty">
+        <span>暂无数据</span>
+      </div>
     </div>
-    <div class="waveform-chart__legend">
-      <div v-for="(color, funcCode) in funcColors" :key="funcCode" class="waveform-chart__legend-item">
+    <div v-if="hasDisplayData" class="waveform-chart__legend">
+      <div v-for="(color, funcCode) in displayFuncColors" :key="funcCode" class="waveform-chart__legend-item">
         <span class="waveform-chart__legend-color" :style="{ backgroundColor: color }"></span>
         <span class="waveform-chart__legend-label">{{ funcCode }}</span>
       </div>
@@ -26,18 +45,38 @@ const props = defineProps<{
   isActive: boolean;
 }>();
 
+defineEmits<{
+  replay: [];
+}>();
+
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const chartContainer = ref<HTMLElement | null>(null);
+const lastTime = ref(0);
+const replayHover = ref(false);
 
-const rawGlobalTime = computed(() => props.waveformData?.globalTime ?? 0);
-const commands = computed(() => props.waveformData?.commands ?? []);
-const globalTime = computed(() => {
-  if (rawGlobalTime.value > 0) return rawGlobalTime.value;
-  const maxTime = commands.value.reduce((m, c) => Math.max(m, c.time), 0);
+const cachedData = ref<WaveformData | null>(null);
+
+watch(() => props.waveformData, (newData) => {
+  if (newData && newData.commands.length > 0) {
+    cachedData.value = { ...newData, commands: [...newData.commands] };
+  }
+}, { deep: true });
+
+const displayData = computed(() => {
+  if (props.waveformData && props.waveformData.commands.length > 0) return props.waveformData;
+  return cachedData.value;
+});
+
+const hasDisplayData = computed(() => !!displayData.value && displayData.value.commands.length > 0);
+const displayTime = computed(() => props.isActive ? props.currentTime : lastTime.value);
+const displayCommands = computed(() => displayData.value?.commands ?? []);
+const displayRawGlobalTime = computed(() => displayData.value?.globalTime ?? 0);
+const displayGlobalTime = computed(() => {
+  if (displayRawGlobalTime.value > 0) return displayRawGlobalTime.value;
+  const maxTime = displayCommands.value.reduce((m, c) => Math.max(m, c.time), 0);
   return maxTime > 0 ? maxTime : 1;
 });
 
-// 生成随机颜色
 function generateColor(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -47,20 +86,18 @@ function generateColor(seed: string): string {
   return `hsl(${hue}, 70%, 55%)`;
 }
 
-// 获取所有功能单元的颜色映射
-const funcColors = computed(() => {
+const displayFuncColors = computed(() => {
   const colors: Record<string, string> = {};
-  const funcCodes = new Set(commands.value.map(c => c.funcCode));
+  const funcCodes = new Set(displayCommands.value.map(c => c.funcCode));
   funcCodes.forEach(code => {
     colors[code] = generateColor(code);
   });
   return colors;
 });
 
-// 获取最大强度
 const maxStrength = computed(() => {
-  if (commands.value.length === 0) return 100;
-  return Math.max(...commands.value.map(c => c.strength), 100);
+  if (displayCommands.value.length === 0) return 100;
+  return Math.max(...displayCommands.value.map(c => c.strength), 100);
 });
 
 // 格式化时间
@@ -136,13 +173,13 @@ function drawChart() {
   ctx.textBaseline = 'top';
   for (let i = 0; i <= timeSteps; i++) {
     const x = padding.left + (chartWidth / timeSteps) * i;
-    const time = (globalTime.value / timeSteps) * i;
+    const time = (displayGlobalTime.value / timeSteps) * i;
     ctx.fillText(formatTime(time), x, padding.top + chartHeight + 4);
   }
 
   // 按功能单元分组绘制波形
   const groupedCommands: Record<string, CommandPoint[]> = {};
-  commands.value.forEach(cmd => {
+  displayCommands.value.forEach(cmd => {
     if (!groupedCommands[cmd.funcCode]) {
       groupedCommands[cmd.funcCode] = [];
     }
@@ -151,47 +188,40 @@ function drawChart() {
 
   // 绘制每个功能单元的波形
   Object.entries(groupedCommands).forEach(([funcCode, funcCommands]) => {
-    const color = funcColors.value[funcCode];
+    const color = displayFuncColors.value[funcCode];
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
 
-    // 排序按时间
     const sortedCmds = [...funcCommands].sort((a, b) => a.time - b.time);
     
-    // 从0点开始
     const startX = padding.left;
-    const startY = padding.top + chartHeight; // 强度0在底部
+    const startY = padding.top + chartHeight;
     ctx.moveTo(startX, startY);
 
     sortedCmds.forEach((cmd, index) => {
-      const x = padding.left + (cmd.time / globalTime.value) * chartWidth;
+      const x = padding.left + (cmd.time / displayGlobalTime.value) * chartWidth;
       const y = padding.top + chartHeight - (cmd.strength / maxStrength.value) * chartHeight;
       
       if (index === 0) {
-        // 水平线到第一个点的时间位置
         ctx.lineTo(x, startY);
       }
       
-      // 垂直跳变到当前强度
       ctx.lineTo(x, y);
       
-      // 如果有下一个点，水平线到下一个点的时间
       if (index < sortedCmds.length - 1) {
-        const nextX = padding.left + (sortedCmds[index + 1].time / globalTime.value) * chartWidth;
+        const nextX = padding.left + (sortedCmds[index + 1].time / displayGlobalTime.value) * chartWidth;
         ctx.lineTo(nextX, y);
       } else {
-        // 最后一个点，延伸到末尾
         ctx.lineTo(padding.left + chartWidth, y);
       }
     });
 
     ctx.stroke();
 
-    // 绘制数据点
     ctx.fillStyle = color;
     sortedCmds.forEach(cmd => {
-      const x = padding.left + (cmd.time / globalTime.value) * chartWidth;
+      const x = padding.left + (cmd.time / displayGlobalTime.value) * chartWidth;
       const y = padding.top + chartHeight - (cmd.strength / maxStrength.value) * chartHeight;
       ctx.beginPath();
       ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -200,8 +230,9 @@ function drawChart() {
   });
 
   // 绘制当前时间参考线
-  if (props.currentTime >= 0 && props.currentTime <= globalTime.value) {
-    const currentX = padding.left + (props.currentTime / globalTime.value) * chartWidth;
+  const time = displayTime.value;
+  if (time >= 0 && time <= displayGlobalTime.value) {
+    const currentX = padding.left + (time / displayGlobalTime.value) * chartWidth;
     
     // 发光效果
     ctx.shadowColor = '#ff6b6b';
@@ -223,26 +254,32 @@ function drawChart() {
     ctx.font = 'bold 10px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(formatTime(props.currentTime), currentX, padding.top - 2);
+    ctx.fillText(formatTime(time), currentX, padding.top - 2);
   }
 }
 
-// 监听数据变化重绘
-watch([() => props.waveformData, () => props.currentTime, () => props.isActive], () => {
-  if (props.isActive) {
+watch(() => props.currentTime, (t) => {
+  if (props.isActive) lastTime.value = t;
+});
+
+watch(() => props.isActive, (active) => {
+  if (!active) lastTime.value = 0;
+});
+
+watch([displayData, () => props.currentTime, () => props.isActive], () => {
+  if (hasDisplayData.value) {
     requestAnimationFrame(drawChart);
   }
 }, { deep: true });
 
-// 响应容器大小变化
 useResizeObserver(chartContainer, () => {
-  if (props.isActive) {
+  if (hasDisplayData.value) {
     requestAnimationFrame(drawChart);
   }
 });
 
 onMounted(() => {
-  if (props.isActive) {
+  if (hasDisplayData.value) {
     requestAnimationFrame(drawChart);
   }
 });
@@ -271,14 +308,94 @@ onMounted(() => {
   opacity: 0.8;
 }
 
+.waveform-chart__header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.waveform-chart__replay-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 10px;
+  color: var(--SmartThemeBodyColor);
+  background: transparent;
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+}
+
+.waveform-chart__replay-btn:hover {
+  opacity: 1;
+  background: var(--SmartThemeBlurTintColor);
+  border-color: var(--SmartThemeQuoteColor);
+  color: var(--SmartThemeQuoteColor);
+}
+
+.waveform-chart__replay-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  background: var(--SmartThemeBlurTintColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 100;
+}
+
 .waveform-chart__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: monospace;
   opacity: 0.7;
 }
 
+.waveform-chart__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.waveform-chart__status-dot--active {
+  background: #67c23a;
+  box-shadow: 0 0 4px #67c23a;
+  animation: waveform-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes waveform-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .waveform-chart__canvas-container {
+  position: relative;
   width: 100%;
   height: 100px;
+}
+
+.waveform-chart__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor);
+  opacity: 0.4;
 }
 
 .waveform-chart__canvas {

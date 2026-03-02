@@ -387,11 +387,9 @@ async function sendInternal(cmdText: string, appendChecksum = true): Promise<boo
     if (appendChecksum) {
       const checksum = makeCheckSum(cmdText);
       finalCmdText += checksum;
-      console.log(`[Bluetooth] 计算校验和: ${checksum}, 最终命令: ${finalCmdText}`);
     }
 
     const data = hexToBytes(finalCmdText);
-    console.log(`[Bluetooth] 准备发送数据: ${finalCmdText}`);
 
     let char = bluetoothWriteCharacteristic.value;
     if (!char && bluetoothDevice.value.gatt) {
@@ -407,7 +405,6 @@ async function sendInternal(cmdText: string, appendChecksum = true): Promise<boo
     }
 
     await char.writeValue(data);
-    console.log('[Bluetooth] 发送成功');
     return true;
   } catch (error) {
     console.error('[Bluetooth] 发送指令失败:', error);
@@ -436,7 +433,6 @@ async function sendFunctionStrength(funcCode: string, strength: number): Promise
 
   // 组装指令: deviceNo + funcCode + 强度16进制 + 00
   const cmd = `${deviceNo} ${funcCodeHex} ${strengthHex} 00`;
-  console.log(`[Bluetooth] 发送功能点指令: ${funcCode}, 强度: ${clampedStrength}, 指令: ${cmd}`);
 
   try {
     await sendInternal(cmd);

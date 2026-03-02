@@ -2,7 +2,7 @@
   <div class="floating-window bluetooth-window">
     <!-- 窗口标题栏 -->
     <div class="floating-window__header">
-      <div class="floating-window__header-left">
+      <div class="floating-window__header-left" @click="handleHeaderTap">
         <img :src="logoUrl" alt="logo" class="floating-window__logo" />
         <span>MONEU</span>
       </div>
@@ -41,9 +41,19 @@
           <div class="status-indicator" :class="{ 'is-connected': isConnected }">
             <i class="fas fa-circle"></i>
             <template v-if="isConnected && deviceInfo">
-              <span v-if="deviceInfo.bgUrl" class="product-avatar-wrapper">
+              <span
+                v-if="deviceInfo.bgUrl"
+                class="product-avatar-wrapper"
+                @mouseenter="updatePreviewPosition"
+                @mouseleave="previewVisible = false"
+              >
                 <img :src="deviceInfo.bgUrl" alt="product" class="product-avatar" />
-                <img :src="deviceInfo.bgUrl" alt="product" class="product-preview" />
+                <img
+                  :src="deviceInfo.bgUrl"
+                  alt="product"
+                  class="product-preview"
+                  :style="previewStyle"
+                />
               </span>
               <span>{{ deviceInfo.deviceName || deviceName || '已连接' }}</span>
             </template>
@@ -63,17 +73,26 @@
       <div v-if="isConnected && functions.length > 0" class="floating-window__section">
         <div class="control-header">
           <label class="section-label">设备控制</label>
-          <button class="reset-btn" title="复位所有滑块" @click="handleResetAll">
-            <i class="fas fa-undo"></i>
-            <span>复位</span>
-          </button>
+          <div class="control-header__actions">
+            <button class="control-action-btn" :class="{ 'is-active': allPaused }" @click="handlePauseAll">
+              <i :class="allPaused ? 'fas fa-play' : 'fas fa-pause'"></i>
+              <span class="control-action-tooltip">{{ allPaused ? '恢复所有' : '暂停所有' }}</span>
+            </button>
+            <button class="control-action-btn" @click="handleResetAll">
+              <i class="fas fa-undo"></i>
+              <span class="control-action-tooltip">复位滑块</span>
+            </button>
+          </div>
         </div>
         <div ref="controlZoneRef" class="control-zone">
           <div
             v-for="(func, index) in functions"
             :key="func.funcCode"
             class="func-slider"
-            :class="{ 'is-outside': sliderStates[index]?.isOutside }"
+            :class="{
+              'is-outside': sliderStates[index]?.isOutside,
+              'is-paused': sliderStates[index]?.isPaused,
+            }"
             :style="getSliderStyle(index)"
             @pointerdown="handleSliderPointerDown($event, index)"
           >
@@ -85,6 +104,9 @@
               draggable="false"
             />
             <i v-else class="fas fa-circle func-icon-fallback"></i>
+            <div v-if="sliderStates[index]?.isPaused" class="pause-badge">
+              <i class="fas fa-pause"></i>
+            </div>
             <div v-if="sliderStates[index]?.isOutside" class="strength-indicator">
               {{ sliderStates[index]?.strength || 0 }}
             </div>
@@ -94,7 +116,7 @@
 
       <!-- 设备使用场景 -->
       <div v-if="isConnected" class="floating-window__section">
-        <label class="section-label">设备使用场景</label>
+        <label class="section-label">设备场景Prompt</label>
         <textarea
           v-model="deviceScenario"
           class="text_pole scenario-textarea"
@@ -103,8 +125,8 @@
         ></textarea>
       </div>
 
-      <!-- 指令发送 -->
-      <div v-if="isConnected" class="floating-window__section">
+      <!-- 调试: 指令发送 -->
+      <div v-if="debugMode && isConnected" class="floating-window__section">
         <div class="command-bar">
           <input
             v-model="commandInput"
@@ -124,8 +146,8 @@
         </div>
       </div>
 
-      <!-- 指令队列测试 -->
-      <div v-if="isConnected" class="floating-window__section">
+      <!-- 调试: 指令队列测试 -->
+      <div v-if="debugMode && isConnected" class="floating-window__section">
         <label class="section-label">指令队列测试</label>
         <textarea
           v-model="queueInput"
@@ -155,8 +177,8 @@
         </div>
       </div>
 
-      <!-- 波形图表 -->
-      <WaveformChart :waveform-data="waveformData" :current-time="waveformCurrentTime" :is-active="waveformActive" />
+      <!-- 波形图表: 连接后持续展示，波形结束后保留旧数据 -->
+      <WaveformChart v-if="isConnected" :waveform-data="waveformData" :current-time="waveformCurrentTime" :is-active="waveformActive" @replay="handleReplay" />
     </div>
   </div>
 </template>
@@ -170,13 +192,53 @@ import { useWaveform } from './useWaveform';
 import WaveformChart from './WaveformChart.vue';
 
 const minimized = ref(false);
+const debugMode = ref(false);
 const commandInput = ref('');
 const controlZoneRef = ref<HTMLElement | null>(null);
+
+const previewVisible = ref(false);
+const previewPos = ref({ top: 0, left: 0 });
+const previewStyle = computed(() => ({
+  top: `${previewPos.value.top}px`,
+  left: `${previewPos.value.left}px`,
+  opacity: previewVisible.value ? 1 : 0,
+  visibility: previewVisible.value ? 'visible' as const : 'hidden' as const,
+}));
+
+function updatePreviewPosition(e: MouseEvent) {
+  const avatar = (e.currentTarget as HTMLElement).querySelector('.product-avatar');
+  if (!avatar) return;
+  const rect = avatar.getBoundingClientRect();
+  const previewSize = 160;
+  previewPos.value = {
+    top: rect.bottom + 8,
+    left: rect.left + rect.width / 2 - previewSize / 2,
+  };
+  previewVisible.value = true;
+}
 const queueInput = ref('[1000,[[100,["01",30]],[200,["01",60]],[300,["01",90]],[400,["01",60]],[500,["01",30]]]]');
 const queuePlaceholder = '[1000,[[100,["01",30]],[200,["01",60]],[300,["01",90]]]]';
 const queueRunning = ref(false);
 let queueAborted = false;
 let activeFuncCodes: string[] = [];
+const lastExecutedQueue = ref<string | null>(null);
+
+const DEBUG_TAP_COUNT = 5;
+const DEBUG_TAP_WINDOW = 2000;
+const headerTapTimestamps: number[] = [];
+
+function handleHeaderTap() {
+  const now = Date.now();
+  headerTapTimestamps.push(now);
+  while (headerTapTimestamps.length > 0 && now - headerTapTimestamps[0] > DEBUG_TAP_WINDOW) {
+    headerTapTimestamps.shift();
+  }
+  if (headerTapTimestamps.length >= DEBUG_TAP_COUNT) {
+    debugMode.value = !debugMode.value;
+    headerTapTimestamps.length = 0;
+    toastr.info(debugMode.value ? '调试模式已开启' : '调试模式已关闭');
+  }
+}
 
 const {
   isConnected,
@@ -190,7 +252,7 @@ const {
   send,
   sendFunctionStrength,
 } = useBluetooth();
-const { waveformData, waveformCurrentTime, waveformActive } = useWaveform();
+const { waveformData, waveformCurrentTime, waveformActive, lastCommandRaw, requestStopExecution } = useWaveform();
 
 // 功能点列表
 const functions = computed<FunctionInfo[]>(() => deviceInfo.value?.runtimeConf?.functions || []);
@@ -205,6 +267,8 @@ interface SliderState {
   isPinned: boolean;
   strength: number;
   isDragging: boolean;
+  isPaused: boolean;
+  pausedStrength: number;
 }
 
 const sliderStates = ref<SliderState[]>([]);
@@ -239,6 +303,8 @@ watch(
         isPinned: false,
         strength: 0,
         isDragging: false,
+        isPaused: false,
+        pausedStrength: 0,
       }));
     });
   },
@@ -269,29 +335,43 @@ function getSliderStyle(index: number): Record<string, string> {
   };
 }
 
-// 计算当前视口内“滑块中心可达点”到虚线框中心的最远距离
-function getMaxReachableDistance(zoneRect: DOMRect): number {
-  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+// 页面四角到 controlZone 中点的最远距离（窗体拖动时实时更新）
+const cachedMaxDistance = ref(0);
+
+function getParentViewport(): { width: number; height: number } {
+  try {
+    const p = window.parent || window.top;
+    if (p && p !== window) {
+      return { width: p.innerWidth, height: p.innerHeight };
+    }
+  } catch { /* cross-origin fallback */ }
+  return {
+    width: document.documentElement.clientWidth || window.innerWidth,
+    height: document.documentElement.clientHeight || window.innerHeight,
+  };
+}
+
+function updateMaxDistance() {
+  if (!controlZoneRef.value) return;
+  const zoneRect = controlZoneRef.value.getBoundingClientRect();
+  const { width: pageWidth, height: pageHeight } = getParentViewport();
   const zoneCenterX = zoneRect.left + zoneRect.width / 2;
   const zoneCenterY = zoneRect.top + zoneRect.height / 2;
 
-  // 使用滑块中心可达的四个角点，避免窗口位置变化时比例失真
-  const minCenterX = SLIDER_SIZE / 2;
-  const maxCenterX = Math.max(minCenterX, viewportWidth - SLIDER_SIZE / 2);
-  const minCenterY = SLIDER_SIZE / 2;
-  const maxCenterY = Math.max(minCenterY, viewportHeight - SLIDER_SIZE / 2);
-
   const corners: Array<[number, number]> = [
-    [minCenterX, minCenterY],
-    [maxCenterX, minCenterY],
-    [minCenterX, maxCenterY],
-    [maxCenterX, maxCenterY],
+    [0, 0],
+    [pageWidth, 0],
+    [0, pageHeight],
+    [pageWidth, pageHeight],
   ];
 
-  return Math.max(
-    ...corners.map(([x, y]) => Math.sqrt((x - zoneCenterX) ** 2 + (y - zoneCenterY) ** 2)),
-  );
+  const distances = corners.map(([x, y]) => Math.sqrt((x - zoneCenterX) ** 2 + (y - zoneCenterY) ** 2));
+  cachedMaxDistance.value = Math.max(...distances);
+
+  console.log('[Slider] zoneCenter:', { zoneCenterX: Math.round(zoneCenterX), zoneCenterY: Math.round(zoneCenterY) },
+    'corners dist:', distances.map(d => Math.round(d)),
+    'max:', Math.round(cachedMaxDistance.value),
+    'page:', { w: pageWidth, h: pageHeight });
 }
 
 // 计算滑块是否在虚线框外及强度
@@ -317,10 +397,11 @@ function calculateStrength(
   const zoneCenterY = zoneRect.top + zoneRect.height / 2;
 
   const distanceToCenter = Math.sqrt((sliderCenterX - zoneCenterX) ** 2 + (sliderCenterY - zoneCenterY) ** 2);
+  const zoneRadius = Math.sqrt((zoneRect.width / 2) ** 2 + (zoneRect.height / 2) ** 2);
+  const overflow = Math.max(0, distanceToCenter - zoneRadius);
+  const maxOverflow = Math.max(0, cachedMaxDistance.value - zoneRadius);
 
-  // 强度 = 当前距离 / 当前可达最远距离，映射到 [minStrength, maxStrength]
-  const maxReachableDistance = getMaxReachableDistance(zoneRect);
-  const ratio = Math.min(distanceToCenter / (maxReachableDistance || 1), 1);
+  const ratio = Math.min(overflow / (maxOverflow || 1), 1);
   const strength = Math.round(func.minStrength + ratio * (func.maxStrength - func.minStrength));
 
   return { isOutside, strength };
@@ -331,20 +412,63 @@ const throttledSendStrength = throttle((funcCode: string, strength: number) => {
   sendFunctionStrength(funcCode, strength);
 }, 100);
 
+const DRAG_THRESHOLD = 5;
+const DBLCLICK_INTERVAL = 300;
+const lastClickTimes: number[] = [];
+
+function resetSingleSlider(index: number) {
+  const positions = getCenteredPositions(functions.value.length);
+  const state = sliderStates.value[index];
+  const func = functions.value[index];
+  if (!state || !func) return;
+
+  state.x = positions[index].x;
+  state.y = positions[index].y;
+  state.fixedX = 0;
+  state.fixedY = 0;
+  state.isOutside = false;
+  state.isPinned = false;
+  state.strength = 0;
+  state.isPaused = false;
+  state.pausedStrength = 0;
+  sendFunctionStrength(func.funcCode, 0);
+  toastr.info(`已复位 ${func.funcDesc || func.funcCode}`);
+}
+
+function toggleSliderPause(index: number) {
+  const state = sliderStates.value[index];
+  const func = functions.value[index];
+  if (!state || !func || !state.isPinned) return;
+
+  if (state.isPaused) {
+    state.isPaused = false;
+    sendFunctionStrength(func.funcCode, state.pausedStrength);
+    state.strength = state.pausedStrength;
+  } else {
+    state.isPaused = true;
+    state.pausedStrength = state.strength;
+    sendFunctionStrength(func.funcCode, 0);
+  }
+}
+
 function handleSliderPointerDown(event: PointerEvent, index: number) {
   event.preventDefault();
   const state = sliderStates.value[index];
   if (!state || !controlZoneRef.value) return;
 
+  updateMaxDistance();
   const zoneRect = controlZoneRef.value.getBoundingClientRect();
   const func = functions.value[index];
 
-  // 将相对于 control zone 的坐标转换为视口固定坐标
   const initialFixedX = zoneRect.left + state.x;
   const initialFixedY = zoneRect.top + state.y;
   state.fixedX = initialFixedX;
   state.fixedY = initialFixedY;
   state.isDragging = true;
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  let hasMoved = false;
 
   const offsetX = event.clientX - initialFixedX;
   const offsetY = event.clientY - initialFixedY;
@@ -353,6 +477,16 @@ function handleSliderPointerDown(event: PointerEvent, index: number) {
   target.setPointerCapture(event.pointerId);
 
   const handlePointerMove = (e: PointerEvent) => {
+    if (!hasMoved) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
+      hasMoved = true;
+      if (state.isPaused) {
+        state.isPaused = false;
+      }
+    }
+
     const newFixedX = e.clientX - offsetX;
     const newFixedY = e.clientY - offsetY;
     state.fixedX = newFixedX;
@@ -372,11 +506,25 @@ function handleSliderPointerDown(event: PointerEvent, index: number) {
 
   const handlePointerUp = () => {
     state.isDragging = false;
-    state.isPinned = state.isOutside;
     target.releasePointerCapture(event.pointerId);
     target.removeEventListener('pointermove', handlePointerMove);
     target.removeEventListener('pointerup', handlePointerUp);
     target.removeEventListener('lostpointercapture', handlePointerUp);
+
+    if (!hasMoved && state.isPinned) {
+      const now = Date.now();
+      const lastClick = lastClickTimes[index] || 0;
+      if (now - lastClick < DBLCLICK_INTERVAL) {
+        lastClickTimes[index] = 0;
+        resetSingleSlider(index);
+        return;
+      }
+      lastClickTimes[index] = now;
+      toggleSliderPause(index);
+      return;
+    }
+
+    state.isPinned = state.isOutside;
   };
 
   target.addEventListener('pointermove', handlePointerMove);
@@ -397,6 +545,8 @@ function recalcOutsideSliders() {
     state.x = relX;
     state.y = relY;
 
+    if (state.isPaused) return;
+
     const func = functions.value[index];
     if (!func) return;
 
@@ -416,16 +566,18 @@ const { pause: pauseZonePolling, resume: resumeZonePolling } = useRafFn(
   () => {
     if (!controlZoneRef.value) return;
     const rect = controlZoneRef.value.getBoundingClientRect();
+    const vp = getParentViewport();
     if (
       rect.left !== lastZoneLeft ||
       rect.top !== lastZoneTop ||
-      window.innerWidth !== lastWindowWidth ||
-      window.innerHeight !== lastWindowHeight
+      vp.width !== lastWindowWidth ||
+      vp.height !== lastWindowHeight
     ) {
       lastZoneLeft = rect.left;
       lastZoneTop = rect.top;
-      lastWindowWidth = window.innerWidth;
-      lastWindowHeight = window.innerHeight;
+      lastWindowWidth = vp.width;
+      lastWindowHeight = vp.height;
+      updateMaxDistance();
       recalcOutsideSliders();
     }
   },
@@ -447,6 +599,53 @@ watch(
   },
 );
 
+const allPaused = computed(() => {
+  const pinned = sliderStates.value.filter((s: SliderState) => s.isPinned);
+  return pinned.length > 0 && pinned.every((s: SliderState) => s.isPaused);
+});
+
+function handlePauseAll() {
+  const shouldResume = allPaused.value;
+
+  if (shouldResume) {
+    sliderStates.value.forEach((state: SliderState, index: number) => {
+      if (!state.isPinned) return;
+      const func = functions.value[index];
+      if (!func) return;
+      state.isPaused = false;
+      sendFunctionStrength(func.funcCode, state.pausedStrength);
+      state.strength = state.pausedStrength;
+    });
+    return;
+  }
+
+  // Stop the local queue execution
+  if (queueRunning.value) {
+    queueAborted = true;
+  }
+
+  // Stop MuCmdParser execution from index.ts
+  requestStopExecution();
+
+  // Pause all pinned sliders and send strength 0 to every function code
+  const sentCodes = new Set<string>();
+  sliderStates.value.forEach((state: SliderState, index: number) => {
+    if (!state.isPinned) return;
+    const func = functions.value[index];
+    if (!func) return;
+    state.isPaused = true;
+    state.pausedStrength = state.strength;
+    sendFunctionStrength(func.funcCode, 0);
+    sentCodes.add(func.funcCode);
+  });
+
+  for (const func of functions.value) {
+    if (!sentCodes.has(func.funcCode)) {
+      sendFunctionStrength(func.funcCode, 0);
+    }
+  }
+}
+
 function handleResetAll() {
   const positions = getCenteredPositions(functions.value.length);
   functions.value.forEach((func: FunctionInfo, index: number) => {
@@ -459,6 +658,8 @@ function handleResetAll() {
       state.isOutside = false;
       state.isPinned = false;
       state.strength = 0;
+      state.isPaused = false;
+      state.pausedStrength = 0;
       sendFunctionStrength(func.funcCode, 0);
     }
   });
@@ -507,9 +708,22 @@ function parseFuncUnits(element: unknown[]): Array<{ funcCode: string; strength:
   return units;
 }
 
+function handleReplay() {
+  if (queueRunning.value) return;
+  if (lastExecutedQueue.value) {
+    queueInput.value = lastExecutedQueue.value;
+    handleExecuteQueue();
+  } else if (lastCommandRaw.value) {
+    queueInput.value = lastCommandRaw.value;
+    handleExecuteQueue();
+  }
+}
+
 async function handleExecuteQueue() {
   const input = queueInput.value.trim();
   if (!input) return;
+  lastExecutedQueue.value = input;
+  lastCommandRaw.value = input;
 
   let parsed: unknown[];
   try {
@@ -552,7 +766,7 @@ async function handleExecuteQueue() {
   }
   queue.sort((a, b) => a.time - b.time);
 
-  console.log('[QueueTest] 解析指令:', { globalTime, cycleTime, commands, queue });
+  // console.log('[QueueTest] 解析指令:', { globalTime, cycleTime, commands, queue });
 
   const waveformPoints: Array<{ funcCode: string; time: number; strength: number }> = [];
   for (const cmd of commands) {
@@ -602,7 +816,7 @@ async function handleExecuteQueue() {
           currentTime = item.time;
         }
         if (queueAborted || checkExpired()) return;
-        console.log(`[QueueTest] funcCode=${item.funcCode}, 强度=${item.strength}, @${item.time}ms`);
+        // console.log(`[QueueTest] funcCode=${item.funcCode}, 强度=${item.strength}, @${item.time}ms`);
         await sendFunctionStrength(item.funcCode, item.strength);
       }
       if (queueAborted || checkExpired()) return;
@@ -621,8 +835,8 @@ async function handleExecuteQueue() {
     }
     activeFuncCodes = [];
     queueRunning.value = false;
-    waveformActive.value = false;
     waveformCurrentTime.value = 0;
+    waveformActive.value = false;
   }
 }
 
@@ -723,10 +937,7 @@ function handleStopQueue() {
 }
 
 .product-preview {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   width: 160px;
   height: 160px;
   object-fit: contain;
@@ -740,12 +951,7 @@ function handleStopQueue() {
     opacity 0.2s ease,
     visibility 0.2s ease;
   pointer-events: none;
-  z-index: 100;
-}
-
-.product-avatar-wrapper:hover .product-preview {
-  opacity: 1;
-  visibility: visible;
+  z-index: 10000;
 }
 
 .battery-compact {
@@ -819,11 +1025,20 @@ function handleStopQueue() {
   margin-bottom: 0;
 }
 
-.reset-btn {
+.control-header__actions {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+}
+
+.control-action-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   font-size: 11px;
   color: var(--SmartThemeBodyColor);
   background: transparent;
@@ -833,14 +1048,49 @@ function handleStopQueue() {
   transition: all 0.2s ease;
 }
 
-.reset-btn:hover {
+.control-action-btn:hover {
   background: var(--SmartThemeBlurTintColor);
   border-color: var(--SmartThemeQuoteColor);
   color: var(--SmartThemeQuoteColor);
 }
 
-.reset-btn i {
+.control-action-btn.is-active {
+  border-color: #e6a23c;
+  color: #e6a23c;
+}
+
+.control-action-btn.is-active:hover {
+  border-color: #67c23a;
+  color: #67c23a;
+}
+
+.control-action-btn i {
   font-size: 10px;
+}
+
+.control-action-tooltip {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: var(--SmartThemeBlurTintColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s ease;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.control-action-btn:hover .control-action-tooltip {
+  opacity: 1;
+  visibility: visible;
 }
 
 .control-zone {
@@ -904,6 +1154,28 @@ function handleStopQueue() {
   font-size: 16px;
   color: var(--SmartThemeBodyColor);
   opacity: 0.6;
+}
+
+.func-slider.is-paused {
+  border-color: #909399;
+  opacity: 0.65;
+  box-shadow: 0 0 8px rgba(144, 147, 153, 0.3);
+}
+
+.pause-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #909399;
+  border-radius: 50%;
+  font-size: 7px;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .strength-indicator {

@@ -4,8 +4,7 @@ import './style.scss';
 import { useBluetooth, type DeviceInfo } from './useBluetooth';
 import { useWaveform, type CommandPoint } from './useWaveform';
 
-// 获取波形状态引用
-const { waveformData, waveformCurrentTime, waveformActive } = useWaveform();
+const { waveformData, waveformCurrentTime, waveformActive, lastCommandRaw, registerStopExecution } = useWaveform();
 
 // 解析后的结构体定义
 interface FuncUnit {
@@ -38,29 +37,31 @@ function buildDevicePrompt(deviceInfo: DeviceInfo, scenario: string): string {
       `{"功能单元code":"${f.funcCode}","功能单元描述":"${f.funcDesc}","最大强度":${f.maxStrength},"最小强度":${f.minStrength}}`,
   );
   const functionInfoStr = functionInfoList.join('\n');
+  const user = substitudeMacros("{{user}}");
 
   return `
 不影响情节与设定，对于消息回复进行增强。
-当前已连接情趣用品设备，根据指令场景，生成设备指令进行返回
+当前已连接情趣用品设备，设备作用于${user}，根据指令场景，生成设备指令进行返回
 
 # 设备信息
 ${functionInfoStr}
 
-# 指令信息
+# 指令组成
 全局时间：指令集在全局时间循环执行，单位ms
 指令集：指令元素集合
 指令元素：包含指令执行时间（单位ms）及功能单元集合
 功能单元：功能单元code和功能单元强度
+
+# 指令场景
+${scenario}
 
 # 数据格式
 1.数据包裹在<!--<muCmd></muCmd>-->标签中
 2.数据皆以数组形式展示
 3.功能单元强度为0表示暂停该功能单元。功能单元间互相隔离。
 4.指令执行时间必须大于0。
-5.下标0为"全局时间",1为"指令集"数组，"指令集"数组每个元素为"指令元素"，"指令元素"下标0为指令元素执行时间，1为功能单元集合，每个功能单元元素，下标0为功能单元code，下标1为强度，参考【指令示例】
-
-# 指令场景
-${scenario}
+5.全局时间可以为0，表示持续循环，当没有明确指定时间是，默认持续循环。
+6.下标0为"全局时间",1为"指令集"数组，"指令集"数组每个元素为"指令元素"，"指令元素"下标0为指令元素执行时间，1为功能单元集合，每个功能单元元素，下标0为功能单元code，下标1为强度，参考【指令示例】
 
 # 指令示例
 <!--
@@ -75,10 +76,11 @@ class MuCmdParser {
   private isCapturing = false;
   private lastFullTextLength = 0;
   private sendFuncStrength: (funcCode: string, strength: number) => Promise<boolean>;
-  private timeTracker: ReturnType<typeof setTimeout> | null = null;
+  private timeTracker: ReturnType<typeof setInterval> | null = null;
   private loopStartTime = 0;
-  private currentGlobalTime = 0;
-  private aborted = false;
+  private currentCycleTime = 0;
+  private executionGeneration = 0;
+  private activeFuncCodes = new Set<string>();
 
   constructor(sendFuncStrength: (funcCode: string, strength: number) => Promise<boolean>) {
     this.sendFuncStrength = sendFuncStrength;
@@ -88,7 +90,6 @@ class MuCmdParser {
     if (fullText.length <= this.lastFullTextLength) return;
 
     const delta = fullText.substring(this.lastFullTextLength);
-    console.log('[MuCmd] 增量文本:', delta);
     this.lastFullTextLength = fullText.length;
     this.buffer += delta;
 
@@ -196,6 +197,8 @@ class MuCmdParser {
         return;
       }
 
+      lastCommandRaw.value = cmdData;
+
       const commandSet = this.parseCommandSet(parsed);
       const cycleTime = commandSet.totalDuration > 0 ? commandSet.totalDuration : 1;
 
@@ -214,8 +217,7 @@ class MuCmdParser {
         cmd.funcUnits.map(fu => ({ funcCode: fu.funcCode, time: cmd.time, strength: fu.strength })),
       );
       waveformData.value = { globalTime: cycleTime, commands: waveformPoints };
-      waveformActive.value = true;
-      this.currentGlobalTime = cycleTime;
+      this.currentCycleTime = cycleTime;
 
       this.startExecution(queue, cycleTime, commandSet.globalTime);
     } catch (error) {
@@ -227,69 +229,63 @@ class MuCmdParser {
     this.stopTimeTracker();
     this.loopStartTime = Date.now();
 
-    const updateTime = () => {
+    this.timeTracker = setInterval(() => {
       const elapsed = Date.now() - this.loopStartTime;
-      waveformCurrentTime.value = elapsed % this.currentGlobalTime;
-      this.timeTracker = setTimeout(updateTime, 50);
-    };
-
-    updateTime();
+      waveformCurrentTime.value = elapsed % this.currentCycleTime;
+    }, 50);
   }
 
   private stopTimeTracker(): void {
     if (this.timeTracker) {
-      clearTimeout(this.timeTracker);
+      clearInterval(this.timeTracker);
       this.timeTracker = null;
     }
   }
 
   private startExecution(queue: QueueItem[], cycleTime: number, globalTime: number): void {
     this.stopExecution();
+    waveformActive.value = true;
     this.startTimeTracker();
-    this.aborted = false;
+
+    const gen = ++this.executionGeneration;
+    const isStale = () => gen !== this.executionGeneration;
 
     const funcCodes = [...new Set(queue.map(item => item.funcCode))];
+    funcCodes.forEach(code => this.activeFuncCodes.add(code));
     const startedAt = Date.now();
 
     const cappedWait = (ms: number): Promise<void> => {
       if (globalTime > 0) {
         const remaining = globalTime - (Date.now() - startedAt);
-        if (remaining <= 0) { this.aborted = true; return Promise.resolve(); }
+        if (remaining <= 0) return Promise.resolve();
         return new Promise(r => setTimeout(r, Math.min(ms, remaining)));
       }
       return new Promise(r => setTimeout(r, ms));
     };
 
-    const checkExpired = (): boolean => {
-      if (globalTime > 0 && Date.now() - startedAt >= globalTime) {
-        this.aborted = true;
-        return true;
-      }
-      return false;
-    };
+    const isExpired = (): boolean => globalTime > 0 && Date.now() - startedAt >= globalTime;
 
     const executeSequence = async () => {
       let currentTime = 0;
       this.loopStartTime = Date.now();
 
       for (const item of queue) {
-        if (this.aborted) return;
+        if (isStale() || isExpired()) return;
 
         if (item.time > currentTime) {
           await cappedWait(item.time - currentTime);
           currentTime = item.time;
         }
-        if (this.aborted || checkExpired()) return;
+        if (isStale() || isExpired()) return;
 
         try {
-          console.log(`[MuCmd] 执行: funcCode=${item.funcCode}, 强度=${item.strength}, @${item.time}ms`);
           await this.sendFuncStrength(item.funcCode, item.strength);
         } catch (error) {
           console.error('[MuCmd] 指令执行失败:', error);
         }
       }
 
-      if (this.aborted || checkExpired()) return;
+      if (isStale() || isExpired()) return;
 
       const remaining = cycleTime - currentTime;
       if (remaining > 0) {
@@ -299,10 +295,11 @@ class MuCmdParser {
 
     const run = async () => {
       console.log(`[MuCmd] 循环执行，周期: ${cycleTime}ms, 全局时间: ${globalTime > 0 ? globalTime + 'ms' : '无限'}`);
-      while (!this.aborted) {
+      while (!isStale() && !isExpired()) {
         await executeSequence();
-        checkExpired();
       }
+
+      if (isStale()) return;
 
       console.log('[MuCmd] 执行结束，发送暂停指令');
       for (const funcCode of funcCodes) {
@@ -315,17 +312,16 @@ class MuCmdParser {
 
       this.stopTimeTracker();
       waveformActive.value = false;
-      waveformCurrentTime.value = 0;
     };
 
     run();
   }
 
   stopExecution(): void {
-    this.aborted = true;
+    this.executionGeneration++;
     this.stopTimeTracker();
+    // waveformData is preserved so the chart keeps displaying old data and replay remains functional
     waveformActive.value = false;
-    waveformCurrentTime.value = 0;
   }
 
   reset(): void {
@@ -333,9 +329,14 @@ class MuCmdParser {
     this.isCapturing = false;
     this.lastFullTextLength = 0;
     this.stopExecution();
-    waveformData.value = null;
-    waveformActive.value = false;
-    waveformCurrentTime.value = 0;
+
+    const codes = [...this.activeFuncCodes];
+    this.activeFuncCodes.clear();
+    for (const funcCode of codes) {
+      this.sendFuncStrength(funcCode, 0).catch(err =>
+        console.error(`[MuCmd] reset 暂停功能单元 ${funcCode} 失败:`, err),
+      );
+    }
   }
 }
 
@@ -396,14 +397,24 @@ $(() => {
         muCmdParser.reset();
         muCmdParser = null;
       }
+      registerStopExecution(() => {});
       if (connected && info) {
         muCmdParser = new MuCmdParser(sendFunctionStrength);
+        registerStopExecution(async () => {
+          if (muCmdParser) {
+            muCmdParser.stopExecution();
+          }
+          const funcs = info.runtimeConf?.functions ?? [];
+          for (const f of funcs) {
+            try { await sendFunctionStrength(f.funcCode, 0); } catch { /* noop */ }
+          }
+        });
 
-        generationStartListener = eventOn(tavern_events.GENERATION_STARTED, () => {
-          console.log('[MuCmd] 新生成开始，重置解析器缓冲区');
+        generationStartListener = eventOn(tavern_events.GENERATION_STARTED, (_type, _option, dry_run) => {
+          if (dry_run) return;
           if (muCmdParser) {
             muCmdParser.reset();
-          }
+          }  
         });
 
         streamListener = eventOn(tavern_events.STREAM_TOKEN_RECEIVED, (text: string) => {

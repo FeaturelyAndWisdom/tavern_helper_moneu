@@ -1,9 +1,9 @@
 {
   "type": "module",
   "scripts": {
-    "build:dev": "NODE_OPTIONS='--import tsx' webpack --mode development",
-    "build": "NODE_OPTIONS='--import tsx' webpack --mode production",
-    "watch": "NODE_OPTIONS='--import tsx' webpack --mode development --watch --progress",
+    "build:dev": "cross-env NODE_OPTIONS=\"--import tsx\" webpack --mode development",
+    "build": "cross-env NODE_OPTIONS=\"--import tsx\" webpack --mode production",
+    "watch": "cross-env NODE_OPTIONS=\"--import tsx\" webpack --mode development --watch --progress",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,scss,html,vue}\" --no-error-on-unmatched-pattern",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
@@ -27,6 +27,7 @@
     "@typescript-eslint/parser": "^8.56.1",
     "autoprefixer": "^10.4.27",
     "chokidar": "^4.0.3",
+    "cross-env": "^10.1.0",
     "css-loader": "^7.1.4",
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",

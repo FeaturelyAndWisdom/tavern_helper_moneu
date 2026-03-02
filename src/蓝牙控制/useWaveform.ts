@@ -11,15 +11,25 @@ export interface WaveformData {
   commands: CommandPoint[];
 }
 
-// 波形数据状态（全局单例）
 const waveformData = ref<WaveformData | null>(null);
 const waveformCurrentTime = ref(0);
 const waveformActive = ref(false);
+const lastCommandRaw = ref<string | null>(null);
+
+type StopExecutionCallback = () => void;
+let stopExecutionCallback: StopExecutionCallback | null = null;
 
 export function useWaveform() {
   return {
     waveformData,
     waveformCurrentTime,
     waveformActive,
+    lastCommandRaw,
+    registerStopExecution(cb: StopExecutionCallback) {
+      stopExecutionCallback = cb;
+    },
+    requestStopExecution() {
+      stopExecutionCallback?.();
+    },
   };
 }

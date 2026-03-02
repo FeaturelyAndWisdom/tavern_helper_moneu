@@ -1,9 +1,5 @@
 lockfileVersion: '9.0'
 
-settings:
-  autoInstallPeers: true
-  excludeLinksFromLockfile: false
-
 importers:
 
   .:
@@ -19,11 +15,7 @@ importers:
         version: 13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807))
       '@vueuse/integrations':
         specifier: ^13.9.0
-<<<<<<< HEAD
-        version: 13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807))
-=======
         version: 13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807))
->>>>>>> d56e78e (dev)
       '@vueuse/shared':
         specifier: ^13.9.0
         version: 13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807))
@@ -77,11 +69,7 @@ importers:
         version: 3.5.29(typescript@6.0.0-dev.20250807)
       vue-final-modal:
         specifier: ^4.5.5
-<<<<<<< HEAD
-        version: 4.5.5(@vueuse/core@13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807)))(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807))
-=======
         version: 4.5.5(@vueuse/core@13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807)))(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807))
->>>>>>> d56e78e (dev)
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.29(typescript@6.0.0-dev.20250807))
@@ -132,11 +120,7 @@ importers:
         specifier: ^8.56.1
         version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@6.0.0-dev.20250807)
       autoprefixer:
-<<<<<<< HEAD
         specifier: ^10.4.27
-=======
-        specifier: ^10.4.24
->>>>>>> d56e78e (dev)
         version: 10.4.27(postcss@8.5.6)
       chokidar:
         specifier: ^4.0.3
@@ -166,11 +150,7 @@ importers:
         specifier: ^10.8.0
         version: 10.8.0(@typescript-eslint/parser@8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@6.0.0-dev.20250807))(eslint@9.39.3(jiti@2.6.1))(vue-eslint-parser@10.4.0(eslint@9.39.3(jiti@2.6.1)))
       eslint-webpack-plugin:
-<<<<<<< HEAD
         specifier: ^5.0.3
-=======
-        specifier: ^5.0.2
->>>>>>> d56e78e (dev)
         version: 5.0.3(eslint@9.39.3(jiti@2.6.1))(webpack@5.105.3)
       globals:
         specifier: ^16.5.0
@@ -284,11 +264,7 @@ importers:
         specifier: ^4.1.3
         version: 4.1.3
       webpack:
-<<<<<<< HEAD
         specifier: ^5.105.3
-=======
-        specifier: ^5.105.2
->>>>>>> d56e78e (dev)
         version: 5.105.3(webpack-cli@6.0.1)
       webpack-cli:
         specifier: ^6.0.1
@@ -3431,7 +3407,6 @@ packages:
     engines: {node: '>=0.6.0', teleport: '>=0.2.0'}
     deprecated: |-
       You or someone you depend on is using Q, the JavaScript Promise library that gave JavaScript developers strong feelings about promises. They can almost certainly migrate to the native JavaScript promise now. Thank you literally everyone for joining me in this bet against the odds. Be excellent to each other.
-
       (For a CapTP with native promises, see @endo/eventual-send and @endo/captp)
 
   quansync@0.2.11:
@@ -5074,22 +5049,14 @@ snapshots:
       '@vueuse/shared': 14.2.1(vue@3.5.29(typescript@6.0.0-dev.20250807))
       vue: 3.5.29(typescript@6.0.0-dev.20250807)
 
-<<<<<<< HEAD
-  '@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807))':
-=======
   '@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807))':
->>>>>>> d56e78e (dev)
     dependencies:
       '@vueuse/core': 13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807))
       '@vueuse/shared': 13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807))
       vue: 3.5.29(typescript@6.0.0-dev.20250807)
     optionalDependencies:
       axios: 1.13.6
-<<<<<<< HEAD
-      focus-trap: 7.6.5
-=======
       focus-trap: 7.8.0
->>>>>>> d56e78e (dev)
 
   '@vueuse/metadata@10.11.1': {}
 
@@ -8374,19 +8341,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-<<<<<<< HEAD
-  vue-final-modal@4.5.5(@vueuse/core@13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807)))(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807)):
-    dependencies:
-      '@vueuse/core': 13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807))
-      '@vueuse/integrations': 13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.29(typescript@6.0.0-dev.20250807))
-      focus-trap: 7.6.5
-=======
   vue-final-modal@4.5.5(@vueuse/core@13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807)))(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807)):
     dependencies:
       '@vueuse/core': 13.9.0(vue@3.5.29(typescript@6.0.0-dev.20250807))
       '@vueuse/integrations': 13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.29(typescript@6.0.0-dev.20250807))
       focus-trap: 7.8.0
->>>>>>> d56e78e (dev)
       vue: 3.5.29(typescript@6.0.0-dev.20250807)
 
   vue-loader@17.4.2(vue@3.5.29(typescript@6.0.0-dev.20250807))(webpack@5.105.3):

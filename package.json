@@ -1,8 +1,9 @@
 {
+  "type": "module",
   "scripts": {
-    "build:dev": "webpack --mode development",
-    "build": "webpack --mode production",
-    "watch": "webpack --mode development --watch --progress",
+    "build:dev": "NODE_OPTIONS='--import tsx' webpack --mode development",
+    "build": "NODE_OPTIONS='--import tsx' webpack --mode production",
+    "watch": "NODE_OPTIONS='--import tsx' webpack --mode development --watch --progress",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,scss,html,vue}\" --no-error-on-unmatched-pattern",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
@@ -63,6 +64,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths-webpack-plugin": "^4.2.0",
     "tslib": "^2.8.1",
+    "tsx": "^4.21.0",
     "type-fest": "^4.41.0",
     "typescript": "6.0.0-dev.20250807",
     "typescript-eslint": "^8.56.1",

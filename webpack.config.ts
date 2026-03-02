@@ -7,6 +7,9 @@ import { ChildProcess, exec, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import RemarkHTML from 'remark-html';
 import { Server } from 'socket.io';
 import TerserPlugin from 'terser-webpack-plugin';
@@ -53,7 +56,7 @@ function glob_script_files() {
 
   fs.globSync(`{示例,src}/**/index.{ts,tsx,js,jsx}`)
     .filter(
-      file => process.env.CI !== 'true' || !fs.readFileSync(path.join(import.meta.dirname, file)).includes('@no-ci'),
+      file => process.env.CI !== 'true' || !fs.readFileSync(path.join(__dirname, file)).includes('@no-ci'),
     )
     .forEach(file => {
       const file_dirname = path.dirname(file);
@@ -108,7 +111,7 @@ function watch_tavern_helper(compiler: webpack.Compiler) {
 
 let watcher: FSWatcher;
 const dump = () => {
-  exec('pnpm dump', { cwd: import.meta.dirname });
+  exec('pnpm dump', { cwd: __dirname });
   console.info('\x1b[36m[schema_dump]\x1b[0m 已将所有 schema.ts 转换为 schema.json');
 };
 const dump_debounced = _.debounce(dump, 500, { leading: true, trailing: false });
@@ -130,7 +133,7 @@ function schema_dump(compiler: webpack.Compiler) {
 
 let child_process: ChildProcess;
 const bundle = () => {
-  exec('pnpm sync bundle all', { cwd: import.meta.dirname });
+  exec('pnpm sync bundle all', { cwd: __dirname });
   console.info('\x1b[36m[tavern_sync]\x1b[0m 已打包所有配置了的角色卡/世界书/预设');
 };
 const bundle_debounced = _.debounce(bundle, 500, { leading: true, trailing: false });
@@ -144,7 +147,7 @@ function tavern_sync(compiler: webpack.Compiler) {
       child_process = spawn('pnpm', ['sync', 'watch', 'all', '-f'], {
         shell: true,
         stdio: ['ignore', 'pipe', 'pipe'],
-        cwd: import.meta.dirname,
+        cwd: __dirname,
         env: { ...process.env, FORCE_COLOR: '1' },
       });
       child_process.stdout?.on('data', (data: Buffer) => {
@@ -184,7 +187,7 @@ function tavern_sync(compiler: webpack.Compiler) {
 
 function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Configuration {
   const should_obfuscate = fs
-    .readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8')
+    .readFileSync(path.join(__dirname, entry.script), 'utf-8')
     .includes('@obfuscate');
   const script_filepath = path.parse(entry.script);
 
@@ -196,7 +199,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
     watchOptions: {
       ignored: ['**/dist', '**/node_modules'],
     },
-    entry: path.join(import.meta.dirname, entry.script),
+    entry: path.join(__dirname, entry.script),
     target: 'browserslist',
     output: {
       devtoolNamespace: 'tavern_helper_template',
@@ -212,9 +215,9 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       },
       filename: `${script_filepath.name}.js`,
       path: path.join(
-        import.meta.dirname,
+        __dirname,
         'dist',
-        path.relative(import.meta.dirname, script_filepath.dir).replace(/^[^\\/]+[\\/]/, ''),
+        path.relative(__dirname, script_filepath.dir).replace(/^[^\\/]+[\\/]/, ''),
       ),
       chunkFilename: `${script_filepath.name}.[contenthash].chunk.js`,
       asyncChunks: true,
@@ -413,7 +416,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       plugins: [
         new TsconfigPathsPlugin({
           extensions: ['.ts', '.js', '.tsx', '.jsx'],
-          configFile: path.join(import.meta.dirname, 'tsconfig.json'),
+          configFile: path.join(__dirname, 'tsconfig.json'),
         }),
       ],
       alias: {},
@@ -422,7 +425,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       ? [new MiniCssExtractPlugin()]
       : [
           new HtmlWebpackPlugin({
-            template: path.join(import.meta.dirname, entry.html),
+            template: path.join(__dirname, entry.html),
             filename: path.parse(entry.html).base,
             scriptLoading: 'module',
             cache: false,

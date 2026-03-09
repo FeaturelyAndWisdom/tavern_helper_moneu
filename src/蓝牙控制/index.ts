@@ -2,87 +2,66 @@ import { createScriptIdDiv, teleportStyle } from '@util/script';
 import Window from './Window.vue';
 import './style.scss';
 import { useBluetooth, type DeviceInfo } from './useBluetooth';
-import { useWaveform, type CommandPoint } from './useWaveform';
-
-const { waveformData, waveformCurrentTime, waveformActive, lastCommandRaw, registerStopExecution } = useWaveform();
-
-// 解析后的结构体定义
-interface FuncUnit {
-  funcCode: string;
-  strength: number;
-}
-
-interface CommandElement {
-  time: number;
-  funcUnits: FuncUnit[];
-}
-
-interface ParsedCommandSet {
-  globalTime: number;
-  totalDuration: number;
-  commands: CommandElement[];
-}
-
 interface QueueItem {
   time: number;
+  deviceNo: string;
   funcCode: string;
   strength: number;
 }
 
-// 设备控制 Prompt 模板
-function buildDevicePrompt(deviceInfo: DeviceInfo, scenario: string): string {
-  const functions = deviceInfo.runtimeConf?.functions ?? [];
-  const functionInfoList = functions.map(
-    f =>
-      `{"功能单元code":"${f.funcCode}","功能单元描述":"${f.funcDesc}","最大强度":${f.maxStrength},"最小强度":${f.minStrength}}`,
-  );
-  const functionInfoStr = functionInfoList.join('\n');
-  const user = substitudeMacros("{{user}}");
+function buildDevicePrompt(deviceInfos: DeviceInfo[], _scenario: string): string {
+  const deviceBlocks = deviceInfos.map(info => {
+    const functions = info.runtimeConf?.functions ?? [];
+    const funcLines = functions.map(
+      f => `  - 功能点code: ${f.funcCode}, 描述: ${f.funcDesc}, 强度范围: ${f.minStrength}~${f.maxStrength}`,
+    );
+    return `设备编号: ${info.deviceNo}\n设备名称: ${info.deviceName}\n设备描述: ${info.runtimeConf?.deviceDesc ?? ''}\n功能点:\n${funcLines.join('\n')}`;
+  });
+  const functionInfoStr = deviceBlocks.join('\n\n');
 
-  return `
-不影响情节与设定，对于消息回复进行增强。
-当前已连接情趣用品设备，设备作用于${user}，根据指令场景，生成设备指令进行返回
+  return `[系统指令：启用 MONEU 情趣玩具反馈协议]
+你现在连接到了用户的情趣玩具。根据剧情中发生的情节与角色行为，在回复中插入控制标签来给用户真实的反馈。
 
-# 设备信息
+[设备信息]
 ${functionInfoStr}
 
-# 指令组成
-全局时间：指令集在全局时间循环执行，单位ms
-指令集：指令元素集合
-指令元素：包含指令执行时间（单位ms）及功能单元集合
-功能单元：功能单元code和功能单元强度
+语法格式：[MU:设备编号:设备功能点:功能点强度:持续时间(可选,单位秒)]
+参数说明：
+- 设备编号：支持同时连接多设备，每个指令需要声明设备编号
+- 设备功能点：每个设备可能存在多个功能点，每个功能点作用不同，视情况进行控制，每个功能点是独立的。
+- 强度大小：功能点输出强度。
+- 持续时间：可选，默认持续执行，不支持小数。
 
-# 指令场景
-${scenario}
+示例：
+- *轻轻捏了一下你的手臂* 别发呆了。[MU:${deviceInfos[0]?.deviceNo || 'XX'}:01:15]
+- 既然你犯了错，就得接受惩罚。[MU:${deviceInfos[0]?.deviceNo || 'XX'}:01:25]
+- *快速的连续鞭打* [MU:${deviceInfos[0]?.deviceNo || 'XX'}:01:10:2] [MU:${deviceInfos[0]?.deviceNo || 'XX'}:01:15:3] [MU:${deviceInfos[0]?.deviceNo || 'XX'}:01:20:4]
+- *跪下！* [MU:${deviceInfos[0]?.deviceNo || 'XX'}:01:40:10]
 
-# 数据格式
-1.数据包裹在<!--<muCmd></muCmd>-->标签中
-2.数据皆以数组形式展示
-3.功能单元强度为0表示暂停该功能单元。功能单元间互相隔离。
-4.指令执行时间必须大于0。
-5.全局时间可以为0，表示持续循环，当没有明确指定时间是，默认持续循环。
-6.下标0为"全局时间",1为"指令集"数组，"指令集"数组每个元素为"指令元素"，"指令元素"下标0为指令元素执行时间，1为功能单元集合，每个功能单元元素，下标0为功能单元code，下标1为强度，参考【指令示例】
-
-# 指令示例
-<!--
-<muCmd>[1000,[[100,["01",100]],[200,["01",50]]]]</muCmd>
--->
-`;
+注意：标签不应包含额外文本，仅输出标签即可。并且只能在正文中输出，不得在如思维链等其他任何部分输出完整的标签。`;
 }
 
-// muCmd 解析器
+/**
+ * 解析 [MU:deviceNo:funcCode:strength:duration?] 标签
+ * 
+ * - [MU:deviceNo:funcCode:strength] → 持续执行
+ * - [MU:deviceNo:funcCode:strength:duration] → 执行 duration 秒后归零
+ */
+interface MuTag {
+  deviceNo: string;
+  funcCode: string;
+  strength: number;
+  duration: number | null;
+}
+
 class MuCmdParser {
   private buffer = '';
-  private isCapturing = false;
   private lastFullTextLength = 0;
-  private sendFuncStrength: (funcCode: string, strength: number) => Promise<boolean>;
-  private timeTracker: ReturnType<typeof setInterval> | null = null;
-  private loopStartTime = 0;
-  private currentCycleTime = 0;
+  private sendFuncStrength: (deviceNo: string, funcCode: string, strength: number) => Promise<boolean>;
   private executionGeneration = 0;
-  private activeFuncCodes = new Set<string>();
+  private activeKeys = new Set<string>();
 
-  constructor(sendFuncStrength: (funcCode: string, strength: number) => Promise<boolean>) {
+  constructor(sendFuncStrength: (deviceNo: string, funcCode: string, strength: number) => Promise<boolean>) {
     this.sendFuncStrength = sendFuncStrength;
   }
 
@@ -93,225 +72,107 @@ class MuCmdParser {
     this.lastFullTextLength = fullText.length;
     this.buffer += delta;
 
-    while (true) {
-      if (!this.isCapturing) {
-        const startTag = '<muCmd>';
-        const startIdx = this.buffer.indexOf(startTag);
-        if (startIdx === -1) {
-          const keepFrom = this.buffer.lastIndexOf('<');
-          if (keepFrom > 0) {
-            this.buffer = this.buffer.substring(keepFrom);
-          } else if (this.buffer.length > 200) {
-            this.buffer = '';
-          }
-          break;
-        }
-        this.isCapturing = true;
-        this.buffer = this.buffer.substring(startIdx + startTag.length);
-      }
-
-      if (this.isCapturing) {
-        const endTag = '</muCmd>';
-        const endIdx = this.buffer.indexOf(endTag);
-        if (endIdx === -1) break;
-
-        const cmdData = this.buffer.substring(0, endIdx);
-        this.buffer = this.buffer.substring(endIdx + endTag.length);
-        this.isCapturing = false;
-
-        console.log('[MuCmd] 捕获到完整指令:', cmdData.trim());
-        this.executeCommand(cmdData.trim());
-      }
+    const tags = this.extractTags();
+    if (tags.length > 0) {
+      this.executeTags(tags);
     }
   }
 
-  /**
-   * 解析功能单元，兼容两种格式:
-   * 格式A (多个功能单元作为独立元素): [time, ["01", 80], ["02", 50]]
-   * 格式B (功能单元集合在 index 1):  [time, [["01", 80], ["02", 50]]]
-   * 单功能单元简写:                   [time, ["01", 80]]
-   */
-  private parseFuncUnits(element: unknown[]): FuncUnit[] {
-    const funcUnits: FuncUnit[] = [];
-    const rest = element.slice(1);
+  /** 从 buffer 中提取所有完整的 [MU:...] 标签 */
+  private extractTags(): MuTag[] {
+    const tags: MuTag[] = [];
+    const regex = /\[MU:([^\]]+)\]/g;
+    let match: RegExpExecArray | null;
 
-    for (const item of rest) {
-      if (!Array.isArray(item)) continue;
-
-      if (typeof item[0] === 'string') {
-        funcUnits.push({ funcCode: item[0] as string, strength: item[1] as number });
-      } else if (Array.isArray(item[0])) {
-        for (const pair of item) {
-          if (Array.isArray(pair) && typeof pair[0] === 'string') {
-            funcUnits.push({ funcCode: pair[0] as string, strength: pair[1] as number });
-          }
-        }
+    let lastEnd = 0;
+    while ((match = regex.exec(this.buffer)) !== null) {
+      const parts = match[1].split(':');
+      if (parts.length < 3) {
+        console.warn(`[MuCmd] 标签参数不足: ${match[0]}`);
+        continue;
       }
+
+      const deviceNo = parts[0];
+      const funcCode = parts[1];
+      const strength = parseInt(parts[2], 10);
+      const duration = parts.length >= 4 ? parseInt(parts[3], 10) : null;
+
+      if (isNaN(strength)) {
+        console.warn(`[MuCmd] 无效强度值: ${match[0]}`);
+        continue;
+      }
+      if (duration !== null && isNaN(duration)) {
+        console.warn(`[MuCmd] 无效持续时间: ${match[0]}`);
+        continue;
+      }
+
+      tags.push({ deviceNo, funcCode, strength, duration });
+      lastEnd = match.index + match[0].length;
     }
 
-    return funcUnits;
-  }
-
-  private parseCommandSet(parsed: unknown[]): ParsedCommandSet {
-    const globalTime = parsed[0] as number;
-    const rawCommands = parsed[1] as unknown[][];
-
-    let cumulativeTime = 0;
-    const commands: CommandElement[] = rawCommands.map(element => {
-      const duration = element[0] as number;
-      const cmd: CommandElement = {
-        time: cumulativeTime,
-        funcUnits: this.parseFuncUnits(element),
-      };
-      cumulativeTime += duration;
-      return cmd;
-    });
-
-    return { globalTime, totalDuration: cumulativeTime, commands };
-  }
-
-  private buildQueue(commandSet: ParsedCommandSet): QueueItem[] {
-    const queue: QueueItem[] = [];
-
-    for (const cmd of commandSet.commands) {
-      for (const fu of cmd.funcUnits) {
-        queue.push({ time: cmd.time, funcCode: fu.funcCode, strength: fu.strength });
-      }
+    if (lastEnd > 0) {
+      this.buffer = this.buffer.substring(lastEnd);
+    } else if (this.buffer.length > 500) {
+      const keepFrom = this.buffer.lastIndexOf('[');
+      this.buffer = keepFrom > 0 ? this.buffer.substring(keepFrom) : '';
     }
 
-    queue.sort((a, b) => a.time - b.time);
-    return queue;
+    return tags;
   }
 
-  private executeCommand(cmdData: string): void {
-    try {
-      const parsed = JSON.parse(cmdData);
-
-      if (!Array.isArray(parsed) || parsed.length < 2) {
-        console.error('[MuCmd] 指令格式错误: 期望 [全局时间, 指令集]');
-        return;
-      }
-
-      if (!Array.isArray(parsed[1]) || parsed[1].length === 0) {
-        console.error('[MuCmd] 指令集为空');
-        return;
-      }
-
-      lastCommandRaw.value = cmdData;
-
-      const commandSet = this.parseCommandSet(parsed);
-      const cycleTime = commandSet.totalDuration > 0 ? commandSet.totalDuration : 1;
-
-      console.log('[MuCmd] 解析后的指令结构:');
-      console.log(`  全局时间: ${commandSet.globalTime}ms, 循环周期: ${cycleTime}ms`);
-      for (const cmd of commandSet.commands) {
-        const unitDesc = cmd.funcUnits.map(u => `功能单元=${u.funcCode} 强度=${u.strength}`).join(', ');
-        console.log(`  [${cmd.time}ms] ${unitDesc}`);
-      }
-
-      const queue = this.buildQueue(commandSet);
-      console.log('[MuCmd] 执行队列:');
-      console.table(queue);
-
-      const waveformPoints: CommandPoint[] = commandSet.commands.flatMap(cmd =>
-        cmd.funcUnits.map(fu => ({ funcCode: fu.funcCode, time: cmd.time, strength: fu.strength })),
-      );
-      waveformData.value = { globalTime: cycleTime, commands: waveformPoints };
-      this.currentCycleTime = cycleTime;
-
-      this.startExecution(queue, cycleTime, commandSet.globalTime);
-    } catch (error) {
-      console.error('[MuCmd] 解析指令失败:', error);
-    }
-  }
-
-  private startTimeTracker(): void {
-    this.stopTimeTracker();
-    this.loopStartTime = Date.now();
-
-    this.timeTracker = setInterval(() => {
-      const elapsed = Date.now() - this.loopStartTime;
-      waveformCurrentTime.value = elapsed % this.currentCycleTime;
-    }, 50);
-  }
-
-  private stopTimeTracker(): void {
-    if (this.timeTracker) {
-      clearInterval(this.timeTracker);
-      this.timeTracker = null;
-    }
-  }
-
-  private startExecution(queue: QueueItem[], cycleTime: number, globalTime: number): void {
+  private executeTags(tags: MuTag[]): void {
     this.stopExecution();
-    waveformActive.value = true;
-    this.startTimeTracker();
 
     const gen = ++this.executionGeneration;
     const isStale = () => gen !== this.executionGeneration;
 
-    const funcCodes = [...new Set(queue.map(item => item.funcCode))];
-    funcCodes.forEach(code => this.activeFuncCodes.add(code));
-    const startedAt = Date.now();
+    const hasDuration = tags.some(t => t.duration !== null && t.duration > 0);
 
-    const cappedWait = (ms: number): Promise<void> => {
-      if (globalTime > 0) {
-        const remaining = globalTime - (Date.now() - startedAt);
-        if (remaining <= 0) return Promise.resolve();
-        return new Promise(r => setTimeout(r, Math.min(ms, remaining)));
+    if (!hasDuration) {
+      console.log('[MuCmd] 持续执行标签:', tags.map(t => `${t.deviceNo}:${t.funcCode}:${t.strength}`).join(', '));
+      for (const tag of tags) {
+        const key = `${tag.deviceNo}:${tag.funcCode}`;
+        this.activeKeys.add(key);
+        this.sendFuncStrength(tag.deviceNo, tag.funcCode, tag.strength).catch(err =>
+          console.error('[MuCmd] 发送失败:', err),
+        );
       }
-      return new Promise(r => setTimeout(r, ms));
-    };
+      return;
+    }
 
-    const isExpired = (): boolean => globalTime > 0 && Date.now() - startedAt >= globalTime;
+    let cumulative = 0;
+    const queue: QueueItem[] = [];
 
-    const executeSequence = async () => {
+    for (const tag of tags) {
+      const key = `${tag.deviceNo}:${tag.funcCode}`;
+      this.activeKeys.add(key);
+      const dur = (tag.duration ?? 0) * 1000;
+      queue.push({ time: cumulative, deviceNo: tag.deviceNo, funcCode: tag.funcCode, strength: tag.strength });
+      if (dur > 0) {
+        queue.push({ time: cumulative + dur, deviceNo: tag.deviceNo, funcCode: tag.funcCode, strength: 0 });
+        cumulative += dur;
+      }
+    }
+    queue.sort((a, b) => a.time - b.time);
+
+    console.log('[MuCmd] 执行序列:', queue);
+
+    const run = async () => {
       let currentTime = 0;
-      this.loopStartTime = Date.now();
 
       for (const item of queue) {
-        if (isStale() || isExpired()) return;
-
+        if (isStale()) return;
         if (item.time > currentTime) {
-          await cappedWait(item.time - currentTime);
+          await new Promise<void>(r => setTimeout(r, item.time - currentTime));
           currentTime = item.time;
         }
-        if (isStale() || isExpired()) return;
-
+        if (isStale()) return;
         try {
-          await this.sendFuncStrength(item.funcCode, item.strength);
+          await this.sendFuncStrength(item.deviceNo, item.funcCode, item.strength);
         } catch (error) {
           console.error('[MuCmd] 指令执行失败:', error);
         }
       }
-
-      if (isStale() || isExpired()) return;
-
-      const remaining = cycleTime - currentTime;
-      if (remaining > 0) {
-        await cappedWait(remaining);
-      }
-    };
-
-    const run = async () => {
-      console.log(`[MuCmd] 循环执行，周期: ${cycleTime}ms, 全局时间: ${globalTime > 0 ? globalTime + 'ms' : '无限'}`);
-      while (!isStale() && !isExpired()) {
-        await executeSequence();
-      }
-
-      if (isStale()) return;
-
-      console.log('[MuCmd] 执行结束，发送暂停指令');
-      for (const funcCode of funcCodes) {
-        try {
-          await this.sendFuncStrength(funcCode, 0);
-        } catch (error) {
-          console.error(`[MuCmd] 暂停功能单元 ${funcCode} 失败:`, error);
-        }
-      }
-
-      this.stopTimeTracker();
-      waveformActive.value = false;
     };
 
     run();
@@ -319,22 +180,19 @@ class MuCmdParser {
 
   stopExecution(): void {
     this.executionGeneration++;
-    this.stopTimeTracker();
-    // waveformData is preserved so the chart keeps displaying old data and replay remains functional
-    waveformActive.value = false;
   }
 
   reset(): void {
     this.buffer = '';
-    this.isCapturing = false;
     this.lastFullTextLength = 0;
     this.stopExecution();
 
-    const codes = [...this.activeFuncCodes];
-    this.activeFuncCodes.clear();
-    for (const funcCode of codes) {
-      this.sendFuncStrength(funcCode, 0).catch(err =>
-        console.error(`[MuCmd] reset 暂停功能单元 ${funcCode} 失败:`, err),
+    const keys = [...this.activeKeys];
+    this.activeKeys.clear();
+    for (const key of keys) {
+      const [deviceNo, funcCode] = key.split(':');
+      this.sendFuncStrength(deviceNo, funcCode, 0).catch(err =>
+        console.error(`[MuCmd] reset 暂停 ${key} 失败:`, err),
       );
     }
   }
@@ -353,18 +211,22 @@ $(() => {
 
   const { destroy } = teleportStyle();
 
-  // 获取蓝牙 hook
-  const { isConnected, deviceInfo, deviceScenario, sendFunctionStrength } = useBluetooth();
+  const {
+    hasConnectedDevice,
+    allDeviceInfos,
+    deviceScenario,
+    sendFunctionStrengthByDeviceNo,
+  } = useBluetooth();
 
   const updateInjection = () => {
-    // 清理之前的注入
     if (promptInjection) {
       promptInjection.uninject();
       promptInjection = null;
     }
 
-    if (isConnected.value && deviceInfo.value) {
-      const prompt = buildDevicePrompt(deviceInfo.value, deviceScenario.value);
+    const infos = allDeviceInfos.value;
+    if (hasConnectedDevice.value && infos.length > 0) {
+      const prompt = buildDevicePrompt(infos, deviceScenario.value);
       console.log('[Bluetooth] 注入设备控制 Prompt');
       promptInjection = injectPrompts([
         {
@@ -379,10 +241,18 @@ $(() => {
     }
   };
 
-  // 监听连接状态变化，注入/取消注入 prompt
+  const deviceSignature = computed(() => {
+    const infos = allDeviceInfos.value;
+    return JSON.stringify({
+      connected: hasConnectedDevice.value,
+      devices: infos.map(d => ({ deviceNo: d.deviceNo, productNo: d.productNo })),
+      scenario: deviceScenario.value,
+    });
+  });
+
   watch(
-    [isConnected, deviceInfo, deviceScenario],
-    ([connected, info, scenario]) => {
+    deviceSignature,
+    () => {
       updateInjection();
 
       if (streamListener) {
@@ -397,50 +267,33 @@ $(() => {
         muCmdParser.reset();
         muCmdParser = null;
       }
-      registerStopExecution(() => {});
-      if (connected && info) {
-        muCmdParser = new MuCmdParser(sendFunctionStrength);
-        registerStopExecution(async () => {
-          if (muCmdParser) {
-            muCmdParser.stopExecution();
-          }
-          const funcs = info.runtimeConf?.functions ?? [];
-          for (const f of funcs) {
-            try { await sendFunctionStrength(f.funcCode, 0); } catch { /* noop */ }
-          }
-        });
+      if (hasConnectedDevice.value && allDeviceInfos.value.length > 0) {
+        muCmdParser = new MuCmdParser(sendFunctionStrengthByDeviceNo);
 
         generationStartListener = eventOn(tavern_events.GENERATION_STARTED, (_type, _option, dry_run) => {
           if (dry_run) return;
-          if (muCmdParser) {
-            muCmdParser.reset();
-          }  
+          if (muCmdParser) muCmdParser.reset();
         });
 
         streamListener = eventOn(tavern_events.STREAM_TOKEN_RECEIVED, (text: string) => {
-          if (muCmdParser) {
-            muCmdParser.processIncrement(text);
-          }
+          if (muCmdParser) muCmdParser.processIncrement(text);
         });
 
-        console.log('[Bluetooth] 流式监听已启动 (tavern_events.STREAM_TOKEN_RECEIVED)');
+        console.log('[Bluetooth] 流式监听已启动');
       }
     },
     { immediate: true },
   );
 
-  // 跨聊天文件或在新开聊天时重新注入提示词
   eventOn(tavern_events.CHAT_CHANGED, () => {
     updateInjection();
   });
 
-  // 使用 jquery-ui 实现拖拽
   $window.find('.floating-window').draggable({
     handle: '.floating-window__header',
     containment: 'window',
   });
 
-  // 添加脚本按钮控制窗口显示/隐藏
   appendInexistentScriptButtons([{ name: '蓝牙控制', visible: true }]);
 
   eventOn(getButtonEvent('蓝牙控制'), () => {
@@ -448,18 +301,10 @@ $(() => {
   });
 
   $(window).on('pagehide', () => {
-    if (promptInjection) {
-      promptInjection.uninject();
-    }
-    if (streamListener) {
-      streamListener.stop();
-    }
-    if (generationStartListener) {
-      generationStartListener.stop();
-    }
-    if (muCmdParser) {
-      muCmdParser.reset();
-    }
+    if (promptInjection) promptInjection.uninject();
+    if (streamListener) streamListener.stop();
+    if (generationStartListener) generationStartListener.stop();
+    if (muCmdParser) muCmdParser.reset();
     app.unmount();
     $window.remove();
     destroy();

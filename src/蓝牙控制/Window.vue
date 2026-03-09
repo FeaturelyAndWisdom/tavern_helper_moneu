@@ -7,25 +7,23 @@
         <span>MONEU</span>
       </div>
       <div class="floating-window__header-right">
-        <!-- 操作图标 -->
         <button
-          v-if="!isConnected"
           class="floating-window__btn-icon action-icon"
           :disabled="connecting"
           :title="connecting ? '连接中...' : '搜索设备'"
           @click="handleConnect"
         >
           <i :class="connecting ? 'fas fa-spinner fa-spin' : 'fab fa-bluetooth-b'"></i>
-          <span class="action-tooltip">{{ connecting ? '连接中...' : '搜索设备' }}</span>
+          <span class="action-tooltip">{{ connecting ? '连接中...' : '添加设备' }}</span>
         </button>
         <button
-          v-else
+          v-if="connectedDevices.length > 0"
           class="floating-window__btn-icon action-icon action-icon--disconnect"
-          title="断开连接"
-          @click="handleDisconnect"
+          title="断开所有"
+          @click="handleDisconnectAll"
         >
           <i class="fas fa-unlink"></i>
-          <span class="action-tooltip">断开连接</span>
+          <span class="action-tooltip">断开所有</span>
         </button>
         <button class="floating-window__btn-icon" @click="minimized = !minimized">
           <i :class="minimized ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
@@ -35,99 +33,124 @@
 
     <!-- 窗口内容区 -->
     <div v-show="!minimized" class="floating-window__content">
-      <!-- 连接状态与设备信息 -->
-      <div class="floating-window__section">
+      <!-- 无设备连接 -->
+      <div v-if="connectedDevices.length === 0" class="floating-window__section">
         <div class="status-bar">
-          <div class="status-indicator" :class="{ 'is-connected': isConnected }">
+          <div class="status-indicator">
             <i class="fas fa-circle"></i>
-            <template v-if="isConnected && deviceInfo">
+            <span>未连接</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 多设备列表 -->
+      <div
+        v-for="dev in connectedDevices"
+        :key="dev.id"
+        class="device-card"
+      >
+        <!-- 设备状态栏 -->
+        <div class="floating-window__section">
+          <div class="status-bar">
+            <div class="status-indicator is-connected">
+              <i class="fas fa-circle"></i>
               <span
-                v-if="deviceInfo.bgUrl"
+                v-if="dev.deviceInfo?.bgUrl"
                 class="product-avatar-wrapper"
-                @mouseenter="updatePreviewPosition"
+                @mouseenter="updatePreviewPosition($event, dev)"
                 @mouseleave="previewVisible = false"
               >
-                <img :src="deviceInfo.bgUrl" alt="product" class="product-avatar" />
-                <img
-                  :src="deviceInfo.bgUrl"
-                  alt="product"
-                  class="product-preview"
-                  :style="previewStyle"
-                />
+                <svg class="battery-ring" viewBox="0 0 36 36">
+                  <circle class="battery-ring__track" cx="18" cy="18" r="16" />
+                  <circle
+                    class="battery-ring__fill"
+                    cx="18" cy="18" r="16"
+                    :stroke="getBatteryColor(dev.batteryLevel)"
+                    :stroke-dasharray="getBatteryDashArray(dev.batteryLevel)"
+                    stroke-dashoffset="0"
+                  />
+                </svg>
+                <img :src="dev.deviceInfo.bgUrl" alt="product" class="product-avatar" />
               </span>
-              <span>{{ deviceInfo.deviceName || deviceName || '已连接' }}</span>
-            </template>
-            <span v-else>{{ isConnected ? deviceName || '已连接' : '未连接' }}</span>
-          </div>
-          <div v-if="isConnected && batteryLevel !== null" class="battery-compact">
-            <svg class="battery-icon" viewBox="0 0 32 14" width="24" height="11">
-              <rect x="1" y="1" width="25" height="12" rx="2.5" ry="2.5" :stroke="batteryColor" stroke-width="1.5" fill="none" />
-              <rect x="27" y="4" width="3" height="6" rx="1" ry="1" :fill="batteryColor" />
-              <rect x="3" y="3" :width="(21 * (batteryLevel || 0)) / 100" height="8" rx="1" ry="1" :fill="batteryColor" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- 设备控制模块 -->
-      <div v-if="isConnected && functions.length > 0" class="floating-window__section">
-        <div class="control-header">
-          <label class="section-label">设备控制</label>
-          <div class="control-header__actions">
-            <button class="control-action-btn" :class="{ 'is-active': allPaused }" @click="handlePauseAll">
-              <i :class="allPaused ? 'fas fa-play' : 'fas fa-pause'"></i>
-              <span class="control-action-tooltip">{{ allPaused ? '恢复所有' : '暂停所有' }}</span>
-            </button>
-            <button class="control-action-btn" @click="handleResetAll">
-              <i class="fas fa-undo"></i>
-              <span class="control-action-tooltip">复位滑块</span>
+              <span v-else-if="dev.batteryLevel !== null" class="product-avatar-wrapper product-avatar-wrapper--no-img">
+                <svg class="battery-ring" viewBox="0 0 36 36">
+                  <circle class="battery-ring__track" cx="18" cy="18" r="16" />
+                  <circle
+                    class="battery-ring__fill"
+                    cx="18" cy="18" r="16"
+                    :stroke="getBatteryColor(dev.batteryLevel)"
+                    :stroke-dasharray="getBatteryDashArray(dev.batteryLevel)"
+                    stroke-dashoffset="0"
+                  />
+                </svg>
+                <i class="fas fa-microchip product-avatar-placeholder"></i>
+              </span>
+              <span>{{ dev.deviceInfo?.deviceName || dev.name || '已连接' }}</span>
+            </div>
+            <button
+              class="floating-window__btn-icon action-icon action-icon--disconnect device-disconnect-btn"
+              title="断开此设备"
+              @click="handleDisconnectOne(dev.id)"
+            >
+              <i class="fas fa-times"></i>
             </button>
           </div>
         </div>
-        <div ref="controlZoneRef" class="control-zone">
-          <div
-            v-for="(func, index) in functions"
-            :key="func.funcCode"
-            class="func-slider"
-            :class="{
-              'is-outside': sliderStates[index]?.isOutside,
-              'is-paused': sliderStates[index]?.isPaused,
-            }"
-            :style="getSliderStyle(index)"
-            @pointerdown="handleSliderPointerDown($event, index)"
-          >
-            <img
-              v-if="func.funcIconUrl"
-              :src="func.funcIconUrl"
-              :alt="func.funcDesc"
-              class="func-icon"
-              draggable="false"
-            />
-            <i v-else class="fas fa-circle func-icon-fallback"></i>
-            <div v-if="sliderStates[index]?.isPaused" class="pause-badge">
-              <i class="fas fa-pause"></i>
+
+        <!-- 设备控制模块 -->
+        <div v-if="getDeviceFunctions(dev).length > 0" class="floating-window__section">
+          <div class="control-header">
+            <label class="section-label">设备控制</label>
+            <div class="control-header__actions">
+              <button class="control-action-btn" :class="{ 'is-active': isDeviceAllPaused(dev.id) }" @click="handlePauseDevice(dev.id)">
+                <i :class="isDeviceAllPaused(dev.id) ? 'fas fa-play' : 'fas fa-pause'"></i>
+                <span class="control-action-tooltip">{{ isDeviceAllPaused(dev.id) ? '恢复' : '暂停' }}</span>
+              </button>
+              <button class="control-action-btn" @click="handleResetDevice(dev.id)">
+                <i class="fas fa-undo"></i>
+                <span class="control-action-tooltip">复位</span>
+              </button>
             </div>
-            <div v-if="sliderStates[index]?.isOutside" class="strength-indicator">
-              {{ sliderStates[index]?.strength || 0 }}
+          </div>
+          <div :ref="el => setControlZoneRef(dev.id, el as HTMLElement)" class="control-zone">
+            <div
+              v-for="(func, fIdx) in getDeviceFunctions(dev)"
+              :key="func.funcCode"
+              class="func-slider"
+              :class="{
+                'is-outside': getSliderState(dev.id, fIdx)?.isOutside,
+                'is-paused': getSliderState(dev.id, fIdx)?.isPaused,
+              }"
+              :style="getSliderStyle(dev.id, fIdx)"
+              @pointerdown="handleSliderPointerDown($event, dev.id, fIdx)"
+            >
+              <img
+                v-if="func.funcIconUrl"
+                :src="func.funcIconUrl"
+                :alt="func.funcDesc"
+                class="func-icon"
+                draggable="false"
+              />
+              <i v-else class="fas fa-circle func-icon-fallback"></i>
+              <div v-if="getSliderState(dev.id, fIdx)?.isPaused" class="pause-badge">
+                <i class="fas fa-pause"></i>
+              </div>
+              <div v-if="getSliderState(dev.id, fIdx)?.isOutside" class="strength-indicator">
+                {{ getSliderState(dev.id, fIdx)?.strength || 0 }}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- 设备使用场景 -->
-      <div v-if="isConnected" class="floating-window__section">
-        <label class="section-label">设备场景Prompt</label>
-        <textarea
-          v-model="deviceScenario"
-          class="text_pole scenario-textarea"
-          placeholder="描述设备使用场景，将追加到 Prompt 中..."
-          rows="3"
-        ></textarea>
       </div>
 
       <!-- 调试: 指令发送 -->
-      <div v-if="debugMode && isConnected" class="floating-window__section">
+      <div v-if="debugMode && connectedDevices.length > 0" class="floating-window__section">
         <div class="command-bar">
+          <select v-model="debugDeviceId" class="text_pole debug-device-select">
+            <option v-for="dev in connectedDevices" :key="dev.id" :value="dev.id">
+              {{ dev.deviceInfo?.deviceName || dev.name }}
+            </option>
+          </select>
           <input
             v-model="commandInput"
             class="text_pole command-input"
@@ -136,7 +159,7 @@
           />
           <button
             class="floating-window__btn-icon action-icon"
-            :disabled="!commandInput.trim()"
+            :disabled="!commandInput.trim() || !debugDeviceId"
             title="发送指令"
             @click="handleSendCommand"
           >
@@ -147,7 +170,7 @@
       </div>
 
       <!-- 调试: 指令队列测试 -->
-      <div v-if="debugMode && isConnected" class="floating-window__section">
+      <div v-if="debugMode && connectedDevices.length > 0" class="floating-window__section">
         <label class="section-label">指令队列测试</label>
         <textarea
           v-model="queueInput"
@@ -177,8 +200,15 @@
         </div>
       </div>
 
-      <!-- 波形图表: 连接后持续展示，波形结束后保留旧数据 -->
-      <WaveformChart v-if="isConnected" :waveform-data="waveformData" :current-time="waveformCurrentTime" :is-active="waveformActive" @replay="handleReplay" />
+      <!-- 产品预览浮层 -->
+      <img
+        v-if="previewSrc"
+        :src="previewSrc"
+        alt="product"
+        class="product-preview"
+        :style="previewStyle"
+      />
+
     </div>
   </div>
 </template>
@@ -187,16 +217,14 @@
 import { useRafFn } from '@vueuse/core';
 import { throttle } from 'lodash';
 import logoUrl from './logo.png?url';
-import { useBluetooth, type FunctionInfo } from './useBluetooth';
-import { useWaveform } from './useWaveform';
-import WaveformChart from './WaveformChart.vue';
-
+import { useBluetooth, type FunctionInfo, type ConnectedDevice } from './useBluetooth';
 const minimized = ref(false);
 const debugMode = ref(false);
 const commandInput = ref('');
-const controlZoneRef = ref<HTMLElement | null>(null);
+const debugDeviceId = ref('');
 
 const previewVisible = ref(false);
+const previewSrc = ref('');
 const previewPos = ref({ top: 0, left: 0 });
 const previewStyle = computed(() => ({
   top: `${previewPos.value.top}px`,
@@ -205,7 +233,7 @@ const previewStyle = computed(() => ({
   visibility: previewVisible.value ? 'visible' as const : 'hidden' as const,
 }));
 
-function updatePreviewPosition(e: MouseEvent) {
+function updatePreviewPosition(e: MouseEvent, dev: ConnectedDevice) {
   const avatar = (e.currentTarget as HTMLElement).querySelector('.product-avatar');
   if (!avatar) return;
   const rect = avatar.getBoundingClientRect();
@@ -214,15 +242,15 @@ function updatePreviewPosition(e: MouseEvent) {
     top: rect.bottom + 8,
     left: rect.left + rect.width / 2 - previewSize / 2,
   };
+  previewSrc.value = dev.deviceInfo?.bgUrl || '';
   previewVisible.value = true;
 }
+
 const queueInput = ref('[1000,[[100,["01",30]],[200,["01",60]],[300,["01",90]],[400,["01",60]],[500,["01",30]]]]');
 const queuePlaceholder = '[1000,[[100,["01",30]],[200,["01",60]],[300,["01",90]]]]';
 const queueRunning = ref(false);
 let queueAborted = false;
 let activeFuncCodes: string[] = [];
-const lastExecutedQueue = ref<string | null>(null);
-
 const DEBUG_TAP_COUNT = 5;
 const DEBUG_TAP_WINDOW = 2000;
 const headerTapTimestamps: number[] = [];
@@ -241,23 +269,29 @@ function handleHeaderTap() {
 }
 
 const {
-  isConnected,
   connecting,
-  deviceName,
-  batteryLevel,
-  deviceScenario,
-  deviceInfo,
+  connectedDevices,
   connect,
-  disconnect,
-  send,
+  disconnectDevice,
+  disconnectAll,
+  sendToDevice,
+  sendFunctionStrengthToDevice,
   sendFunctionStrength,
 } = useBluetooth();
-const { waveformData, waveformCurrentTime, waveformActive, lastCommandRaw, requestStopExecution } = useWaveform();
+watch(connectedDevices, (devs) => {
+  if (devs.length > 0 && !debugDeviceId.value) {
+    debugDeviceId.value = devs[0].id;
+  }
+  if (devs.length > 0 && !devs.find(d => d.id === debugDeviceId.value)) {
+    debugDeviceId.value = devs[0].id;
+  }
+});
 
-// 功能点列表
-const functions = computed<FunctionInfo[]>(() => deviceInfo.value?.runtimeConf?.functions || []);
+function getDeviceFunctions(dev: ConnectedDevice): FunctionInfo[] {
+  return dev.deviceInfo?.runtimeConf?.functions || [];
+}
 
-// 滑块状态
+// ===== 滑块状态管理（per-device） =====
 interface SliderState {
   x: number;
   y: number;
@@ -271,13 +305,25 @@ interface SliderState {
   pausedStrength: number;
 }
 
-const sliderStates = ref<SliderState[]>([]);
+const deviceSliderStates = ref<Map<string, SliderState[]>>(new Map());
+const controlZoneRefs = new Map<string, HTMLElement>();
 const SLIDER_SIZE = 40;
 const SLIDER_GAP = 12;
 const ZONE_HEIGHT = 120;
 
-function getCenteredPositions(count: number): Array<{ x: number; y: number }> {
-  const zoneWidth = controlZoneRef.value?.clientWidth || 270;
+function setControlZoneRef(deviceId: string, el: HTMLElement | null) {
+  if (el) {
+    controlZoneRefs.set(deviceId, el);
+  } else {
+    controlZoneRefs.delete(deviceId);
+  }
+}
+
+function getSliderState(deviceId: string, fIdx: number): SliderState | undefined {
+  return deviceSliderStates.value.get(deviceId)?.[fIdx];
+}
+
+function getCenteredPositions(count: number, zoneWidth = 270): Array<{ x: number; y: number }> {
   const columns = Math.min(count, 4);
   const rows = Math.ceil(count / columns);
   const totalW = columns * SLIDER_SIZE + (columns - 1) * SLIDER_GAP;
@@ -291,35 +337,53 @@ function getCenteredPositions(count: number): Array<{ x: number; y: number }> {
 }
 
 watch(
-  functions,
-  (newFuncs: FunctionInfo[]) => {
+  connectedDevices,
+  (devs) => {
     nextTick(() => {
-      const positions = getCenteredPositions(newFuncs.length);
-      sliderStates.value = newFuncs.map((_: FunctionInfo, index: number) => ({
-        ...positions[index],
-        fixedX: 0,
-        fixedY: 0,
-        isOutside: false,
-        isPinned: false,
-        strength: 0,
-        isDragging: false,
-        isPaused: false,
-        pausedStrength: 0,
-      }));
+      const newMap = new Map(deviceSliderStates.value);
+      for (const dev of devs) {
+        const funcs = getDeviceFunctions(dev);
+        const existing = newMap.get(dev.id);
+        if (!existing || existing.length !== funcs.length) {
+          const zone = controlZoneRefs.get(dev.id);
+          const zoneWidth = zone?.clientWidth || 270;
+          const positions = getCenteredPositions(funcs.length, zoneWidth);
+          newMap.set(dev.id, funcs.map((_: FunctionInfo, i: number) => ({
+            ...positions[i],
+            fixedX: 0, fixedY: 0,
+            isOutside: false, isPinned: false,
+            strength: 0, isDragging: false,
+            isPaused: false, pausedStrength: 0,
+          })));
+        }
+      }
+      const activeIds = new Set(devs.map(d => d.id));
+      for (const key of newMap.keys()) {
+        if (!activeIds.has(key)) newMap.delete(key);
+      }
+      deviceSliderStates.value = newMap;
     });
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 );
 
-const batteryColor = computed(() => {
-  if (batteryLevel.value === null) return '#909399';
-  if (batteryLevel.value <= 20) return '#f56c6c';
-  if (batteryLevel.value <= 50) return '#e6a23c';
-  return '#67c23a';
-});
+const BATTERY_RING_CIRCUMFERENCE = 2 * Math.PI * 16;
 
-function getSliderStyle(index: number): Record<string, string> {
-  const state = sliderStates.value[index];
+function getBatteryColor(level: number | null): string {
+  if (level === null) return '#909399';
+  if (level <= 20) return '#f56c6c';
+  if (level <= 50) return '#e6a23c';
+  return '#67c23a';
+}
+
+function getBatteryDashArray(level: number | null): string {
+  const pct = (level ?? 0) / 100;
+  const filled = pct * BATTERY_RING_CIRCUMFERENCE;
+  return `${filled} ${BATTERY_RING_CIRCUMFERENCE - filled}`;
+}
+
+function getSliderStyle(deviceId: string, index: number): Record<string, string> {
+  const state = deviceSliderStates.value.get(deviceId)?.[index];
   if (!state) return {};
   if (state.isDragging || state.isPinned) {
     return {
@@ -330,135 +394,118 @@ function getSliderStyle(index: number): Record<string, string> {
       zIndex: '99999',
     };
   }
-  return {
-    transform: `translate(${state.x}px, ${state.y}px)`,
-  };
+  return { transform: `translate(${state.x}px, ${state.y}px)` };
 }
 
-// 页面四角到 controlZone 中点的最远距离（窗体拖动时实时更新）
-const cachedMaxDistance = ref(0);
+const cachedMaxDistances = new Map<string, number>();
 
 function getParentViewport(): { width: number; height: number } {
   try {
     const p = window.parent || window.top;
-    if (p && p !== window) {
-      return { width: p.innerWidth, height: p.innerHeight };
-    }
-  } catch { /* cross-origin fallback */ }
+    if (p && p !== window) return { width: p.innerWidth, height: p.innerHeight };
+  } catch { /* cross-origin */ }
   return {
     width: document.documentElement.clientWidth || window.innerWidth,
     height: document.documentElement.clientHeight || window.innerHeight,
   };
 }
 
-function updateMaxDistance() {
-  if (!controlZoneRef.value) return;
-  const zoneRect = controlZoneRef.value.getBoundingClientRect();
-  const { width: pageWidth, height: pageHeight } = getParentViewport();
-  const zoneCenterX = zoneRect.left + zoneRect.width / 2;
-  const zoneCenterY = zoneRect.top + zoneRect.height / 2;
-
-  const corners: Array<[number, number]> = [
-    [0, 0],
-    [pageWidth, 0],
-    [0, pageHeight],
-    [pageWidth, pageHeight],
-  ];
-
-  const distances = corners.map(([x, y]) => Math.sqrt((x - zoneCenterX) ** 2 + (y - zoneCenterY) ** 2));
-  cachedMaxDistance.value = Math.max(...distances);
-
-  console.log('[Slider] zoneCenter:', { zoneCenterX: Math.round(zoneCenterX), zoneCenterY: Math.round(zoneCenterY) },
-    'corners dist:', distances.map(d => Math.round(d)),
-    'max:', Math.round(cachedMaxDistance.value),
-    'page:', { w: pageWidth, h: pageHeight });
+function updateMaxDistance(deviceId: string) {
+  const zone = controlZoneRefs.get(deviceId);
+  if (!zone) return;
+  const zoneRect = zone.getBoundingClientRect();
+  const { width: pw, height: ph } = getParentViewport();
+  const cx = zoneRect.left + zoneRect.width / 2;
+  const cy = zoneRect.top + zoneRect.height / 2;
+  const corners: [number, number][] = [[0, 0], [pw, 0], [0, ph], [pw, ph]];
+  const maxDist = Math.max(...corners.map(([x, y]) => Math.sqrt((x - cx) ** 2 + (y - cy) ** 2)));
+  cachedMaxDistances.set(deviceId, maxDist);
 }
 
-// 计算滑块是否在虚线框外及强度
 function calculateStrength(
-  sliderX: number,
-  sliderY: number,
-  zoneRect: DOMRect,
-  func: FunctionInfo,
+  sliderX: number, sliderY: number,
+  zoneRect: DOMRect, func: FunctionInfo,
+  deviceId: string,
 ): { isOutside: boolean; strength: number } {
-  // 用滑块边缘判断"是否越出虚线框"
   const distX = Math.max(0, -sliderX, sliderX + SLIDER_SIZE - zoneRect.width);
   const distY = Math.max(0, -sliderY, sliderY + SLIDER_SIZE - zoneRect.height);
   const isOutside = distX > 0 || distY > 0;
+  if (!isOutside) return { isOutside: false, strength: 0 };
 
-  if (!isOutside) {
-    return { isOutside: false, strength: 0 };
-  }
-
-  // 计算滑块中心到虚线框中心的距离
   const sliderCenterX = zoneRect.left + sliderX + SLIDER_SIZE / 2;
   const sliderCenterY = zoneRect.top + sliderY + SLIDER_SIZE / 2;
   const zoneCenterX = zoneRect.left + zoneRect.width / 2;
   const zoneCenterY = zoneRect.top + zoneRect.height / 2;
-
   const distanceToCenter = Math.sqrt((sliderCenterX - zoneCenterX) ** 2 + (sliderCenterY - zoneCenterY) ** 2);
   const zoneRadius = Math.sqrt((zoneRect.width / 2) ** 2 + (zoneRect.height / 2) ** 2);
   const overflow = Math.max(0, distanceToCenter - zoneRadius);
-  const maxOverflow = Math.max(0, cachedMaxDistance.value - zoneRadius);
-
+  const maxOverflow = Math.max(0, (cachedMaxDistances.get(deviceId) || 500) - zoneRadius);
   const ratio = Math.min(overflow / (maxOverflow || 1), 1);
   const strength = Math.round(func.minStrength + ratio * (func.maxStrength - func.minStrength));
-
   return { isOutside, strength };
 }
 
-// 节流发送指令
-const throttledSendStrength = throttle((funcCode: string, strength: number) => {
-  sendFunctionStrength(funcCode, strength);
+const throttledSendStrength = throttle((deviceId: string, funcCode: string, strength: number) => {
+  sendFunctionStrengthToDevice(deviceId, funcCode, strength);
 }, 100);
 
 const DRAG_THRESHOLD = 5;
 const DBLCLICK_INTERVAL = 300;
-const lastClickTimes: number[] = [];
+const lastClickTimes: Map<string, number[]> = new Map();
 
-function resetSingleSlider(index: number) {
-  const positions = getCenteredPositions(functions.value.length);
-  const state = sliderStates.value[index];
-  const func = functions.value[index];
+function resetSingleSlider(deviceId: string, index: number) {
+  const states = deviceSliderStates.value.get(deviceId);
+  const dev = connectedDevices.value.find(d => d.id === deviceId);
+  if (!states || !dev) return;
+  const funcs = getDeviceFunctions(dev);
+  const state = states[index];
+  const func = funcs[index];
   if (!state || !func) return;
 
-  state.x = positions[index].x;
-  state.y = positions[index].y;
-  state.fixedX = 0;
-  state.fixedY = 0;
-  state.isOutside = false;
-  state.isPinned = false;
-  state.strength = 0;
-  state.isPaused = false;
-  state.pausedStrength = 0;
-  sendFunctionStrength(func.funcCode, 0);
+  const zone = controlZoneRefs.get(deviceId);
+  const positions = getCenteredPositions(funcs.length, zone?.clientWidth || 270);
+  Object.assign(state, {
+    x: positions[index].x, y: positions[index].y,
+    fixedX: 0, fixedY: 0,
+    isOutside: false, isPinned: false,
+    strength: 0, isPaused: false, pausedStrength: 0,
+  });
+  sendFunctionStrengthToDevice(deviceId, func.funcCode, 0);
   toastr.info(`已复位 ${func.funcDesc || func.funcCode}`);
 }
 
-function toggleSliderPause(index: number) {
-  const state = sliderStates.value[index];
-  const func = functions.value[index];
+function toggleSliderPause(deviceId: string, index: number) {
+  const states = deviceSliderStates.value.get(deviceId);
+  const dev = connectedDevices.value.find(d => d.id === deviceId);
+  if (!states || !dev) return;
+  const state = states[index];
+  const func = getDeviceFunctions(dev)[index];
   if (!state || !func || !state.isPinned) return;
 
   if (state.isPaused) {
     state.isPaused = false;
-    sendFunctionStrength(func.funcCode, state.pausedStrength);
+    sendFunctionStrengthToDevice(deviceId, func.funcCode, state.pausedStrength);
     state.strength = state.pausedStrength;
   } else {
     state.isPaused = true;
     state.pausedStrength = state.strength;
-    sendFunctionStrength(func.funcCode, 0);
+    sendFunctionStrengthToDevice(deviceId, func.funcCode, 0);
   }
 }
 
-function handleSliderPointerDown(event: PointerEvent, index: number) {
+function handleSliderPointerDown(event: PointerEvent, deviceId: string, index: number) {
   event.preventDefault();
-  const state = sliderStates.value[index];
-  if (!state || !controlZoneRef.value) return;
+  const states = deviceSliderStates.value.get(deviceId);
+  const zone = controlZoneRefs.get(deviceId);
+  const dev = connectedDevices.value.find(d => d.id === deviceId);
+  if (!states || !zone || !dev) return;
+  const state = states[index];
+  if (!state) return;
 
-  updateMaxDistance();
-  const zoneRect = controlZoneRef.value.getBoundingClientRect();
-  const func = functions.value[index];
+  updateMaxDistance(deviceId);
+  const zoneRect = zone.getBoundingClientRect();
+  const funcs = getDeviceFunctions(dev);
+  const func = funcs[index];
 
   const initialFixedX = zoneRect.left + state.x;
   const initialFixedY = zoneRect.top + state.y;
@@ -469,7 +516,6 @@ function handleSliderPointerDown(event: PointerEvent, index: number) {
   const startX = event.clientX;
   const startY = event.clientY;
   let hasMoved = false;
-
   const offsetX = event.clientX - initialFixedX;
   const offsetY = event.clientY - initialFixedY;
 
@@ -482,26 +528,20 @@ function handleSliderPointerDown(event: PointerEvent, index: number) {
       const dy = e.clientY - startY;
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
       hasMoved = true;
-      if (state.isPaused) {
-        state.isPaused = false;
-      }
+      if (state.isPaused) state.isPaused = false;
     }
-
     const newFixedX = e.clientX - offsetX;
     const newFixedY = e.clientY - offsetY;
     state.fixedX = newFixedX;
     state.fixedY = newFixedY;
-
     const relX = newFixedX - zoneRect.left;
     const relY = newFixedY - zoneRect.top;
     state.x = relX;
     state.y = relY;
-
-    const { isOutside, strength } = calculateStrength(relX, relY, zoneRect, func);
+    const { isOutside, strength } = calculateStrength(relX, relY, zoneRect, func, deviceId);
     state.isOutside = isOutside;
     state.strength = strength;
-
-    throttledSendStrength(func.funcCode, strength);
+    throttledSendStrength(deviceId, func.funcCode, strength);
   };
 
   const handlePointerUp = () => {
@@ -512,18 +552,20 @@ function handleSliderPointerDown(event: PointerEvent, index: number) {
     target.removeEventListener('lostpointercapture', handlePointerUp);
 
     if (!hasMoved && state.isPinned) {
+      const key = `${deviceId}_${index}`;
+      if (!lastClickTimes.has(key)) lastClickTimes.set(key, []);
+      const times = lastClickTimes.get(key)!;
       const now = Date.now();
-      const lastClick = lastClickTimes[index] || 0;
+      const lastClick = times[0] || 0;
       if (now - lastClick < DBLCLICK_INTERVAL) {
-        lastClickTimes[index] = 0;
-        resetSingleSlider(index);
+        times.length = 0;
+        resetSingleSlider(deviceId, index);
         return;
       }
-      lastClickTimes[index] = now;
-      toggleSliderPause(index);
+      times[0] = now;
+      toggleSliderPause(deviceId, index);
       return;
     }
-
     state.isPinned = state.isOutside;
   };
 
@@ -532,52 +574,58 @@ function handleSliderPointerDown(event: PointerEvent, index: number) {
   target.addEventListener('lostpointercapture', handlePointerUp);
 }
 
-// 窗体拖拽时重算外部滑块的强度（RAF 轮询，仅在有外部滑块时启动）
 function recalcOutsideSliders() {
-  if (!controlZoneRef.value) return;
-  const zoneRect = controlZoneRef.value.getBoundingClientRect();
+  for (const [deviceId, states] of deviceSliderStates.value) {
+    const zone = controlZoneRefs.get(deviceId);
+    if (!zone) continue;
+    const zoneRect = zone.getBoundingClientRect();
+    const dev = connectedDevices.value.find(d => d.id === deviceId);
+    if (!dev) continue;
+    const funcs = getDeviceFunctions(dev);
 
-  sliderStates.value.forEach((state: SliderState, index: number) => {
-    if (!state.isPinned || state.isDragging) return;
-
-    const relX = state.fixedX - zoneRect.left;
-    const relY = state.fixedY - zoneRect.top;
-    state.x = relX;
-    state.y = relY;
-
-    if (state.isPaused) return;
-
-    const func = functions.value[index];
-    if (!func) return;
-
-    const { isOutside, strength } = calculateStrength(relX, relY, zoneRect, func);
-    state.isOutside = isOutside;
-    state.strength = strength;
-    throttledSendStrength(func.funcCode, strength);
-  });
+    states.forEach((state, idx) => {
+      if (!state.isPinned || state.isDragging) return;
+      const relX = state.fixedX - zoneRect.left;
+      const relY = state.fixedY - zoneRect.top;
+      state.x = relX;
+      state.y = relY;
+      if (state.isPaused) return;
+      const func = funcs[idx];
+      if (!func) return;
+      const { isOutside, strength } = calculateStrength(relX, relY, zoneRect, func, deviceId);
+      state.isOutside = isOutside;
+      state.strength = strength;
+      throttledSendStrength(deviceId, func.funcCode, strength);
+    });
+  }
 }
 
-let lastZoneLeft = -1;
-let lastZoneTop = -1;
+let lastZonePositions = new Map<string, { left: number; top: number }>();
 let lastWindowWidth = -1;
 let lastWindowHeight = -1;
 
 const { pause: pauseZonePolling, resume: resumeZonePolling } = useRafFn(
   () => {
-    if (!controlZoneRef.value) return;
-    const rect = controlZoneRef.value.getBoundingClientRect();
     const vp = getParentViewport();
-    if (
-      rect.left !== lastZoneLeft ||
-      rect.top !== lastZoneTop ||
-      vp.width !== lastWindowWidth ||
-      vp.height !== lastWindowHeight
-    ) {
-      lastZoneLeft = rect.left;
-      lastZoneTop = rect.top;
-      lastWindowWidth = vp.width;
-      lastWindowHeight = vp.height;
-      updateMaxDistance();
+    let changed = vp.width !== lastWindowWidth || vp.height !== lastWindowHeight;
+    lastWindowWidth = vp.width;
+    lastWindowHeight = vp.height;
+
+    for (const [deviceId] of deviceSliderStates.value) {
+      const zone = controlZoneRefs.get(deviceId);
+      if (!zone) continue;
+      const rect = zone.getBoundingClientRect();
+      const prev = lastZonePositions.get(deviceId);
+      if (!prev || rect.left !== prev.left || rect.top !== prev.top) {
+        lastZonePositions.set(deviceId, { left: rect.left, top: rect.top });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      for (const deviceId of deviceSliderStates.value.keys()) {
+        updateMaxDistance(deviceId);
+      }
       recalcOutsideSliders();
     }
   },
@@ -585,11 +633,15 @@ const { pause: pauseZonePolling, resume: resumeZonePolling } = useRafFn(
 );
 
 watch(
-  () => sliderStates.value.some((s: SliderState) => s.isPinned && !s.isDragging),
-  (hasPinned: boolean) => {
+  () => {
+    for (const states of deviceSliderStates.value.values()) {
+      if (states.some(s => s.isPinned && !s.isDragging)) return true;
+    }
+    return false;
+  },
+  (hasPinned) => {
     if (hasPinned) {
-      lastZoneLeft = -1;
-      lastZoneTop = -1;
+      lastZonePositions = new Map();
       lastWindowWidth = -1;
       lastWindowHeight = -1;
       resumeZonePolling();
@@ -599,69 +651,68 @@ watch(
   },
 );
 
-const allPaused = computed(() => {
-  const pinned = sliderStates.value.filter((s: SliderState) => s.isPinned);
-  return pinned.length > 0 && pinned.every((s: SliderState) => s.isPaused);
-});
+function isDeviceAllPaused(deviceId: string): boolean {
+  const states = deviceSliderStates.value.get(deviceId);
+  if (!states) return false;
+  const pinned = states.filter(s => s.isPinned);
+  return pinned.length > 0 && pinned.every(s => s.isPaused);
+}
 
-function handlePauseAll() {
-  const shouldResume = allPaused.value;
+function handlePauseDevice(deviceId: string) {
+  const states = deviceSliderStates.value.get(deviceId);
+  const dev = connectedDevices.value.find(d => d.id === deviceId);
+  if (!states || !dev) return;
+  const funcs = getDeviceFunctions(dev);
+  const shouldResume = isDeviceAllPaused(deviceId);
 
   if (shouldResume) {
-    sliderStates.value.forEach((state: SliderState, index: number) => {
+    states.forEach((state, idx) => {
       if (!state.isPinned) return;
-      const func = functions.value[index];
+      const func = funcs[idx];
       if (!func) return;
       state.isPaused = false;
-      sendFunctionStrength(func.funcCode, state.pausedStrength);
+      sendFunctionStrengthToDevice(deviceId, func.funcCode, state.pausedStrength);
       state.strength = state.pausedStrength;
     });
     return;
   }
 
-  // Stop the local queue execution
-  if (queueRunning.value) {
-    queueAborted = true;
-  }
+  if (queueRunning.value) queueAborted = true;
 
-  // Stop MuCmdParser execution from index.ts
-  requestStopExecution();
-
-  // Pause all pinned sliders and send strength 0 to every function code
   const sentCodes = new Set<string>();
-  sliderStates.value.forEach((state: SliderState, index: number) => {
+  states.forEach((state, idx) => {
     if (!state.isPinned) return;
-    const func = functions.value[index];
+    const func = funcs[idx];
     if (!func) return;
     state.isPaused = true;
     state.pausedStrength = state.strength;
-    sendFunctionStrength(func.funcCode, 0);
+    sendFunctionStrengthToDevice(deviceId, func.funcCode, 0);
     sentCodes.add(func.funcCode);
   });
-
-  for (const func of functions.value) {
+  for (const func of funcs) {
     if (!sentCodes.has(func.funcCode)) {
-      sendFunctionStrength(func.funcCode, 0);
+      sendFunctionStrengthToDevice(deviceId, func.funcCode, 0);
     }
   }
 }
 
-function handleResetAll() {
-  const positions = getCenteredPositions(functions.value.length);
-  functions.value.forEach((func: FunctionInfo, index: number) => {
-    const state = sliderStates.value[index];
-    if (state) {
-      state.x = positions[index].x;
-      state.y = positions[index].y;
-      state.fixedX = 0;
-      state.fixedY = 0;
-      state.isOutside = false;
-      state.isPinned = false;
-      state.strength = 0;
-      state.isPaused = false;
-      state.pausedStrength = 0;
-      sendFunctionStrength(func.funcCode, 0);
-    }
+function handleResetDevice(deviceId: string) {
+  const states = deviceSliderStates.value.get(deviceId);
+  const dev = connectedDevices.value.find(d => d.id === deviceId);
+  if (!states || !dev) return;
+  const funcs = getDeviceFunctions(dev);
+  const zone = controlZoneRefs.get(deviceId);
+  const positions = getCenteredPositions(funcs.length, zone?.clientWidth || 270);
+  funcs.forEach((func, idx) => {
+    const state = states[idx];
+    if (!state) return;
+    Object.assign(state, {
+      x: positions[idx].x, y: positions[idx].y,
+      fixedX: 0, fixedY: 0,
+      isOutside: false, isPinned: false,
+      strength: 0, isPaused: false, pausedStrength: 0,
+    });
+    sendFunctionStrengthToDevice(deviceId, func.funcCode, 0);
   });
   toastr.info('已复位所有滑块');
 }
@@ -670,20 +721,24 @@ function handleConnect() {
   connect();
 }
 
-function handleDisconnect() {
-  disconnect();
-  toastr.info('已断开蓝牙连接');
+function handleDisconnectOne(deviceId: string) {
+  disconnectDevice(deviceId);
+  toastr.info('已断开设备连接');
+}
+
+function handleDisconnectAll() {
+  disconnectAll();
+  toastr.info('已断开所有蓝牙连接');
 }
 
 async function handleSendCommand() {
   const cmd = commandInput.value.trim();
-  if (!cmd) {
-    toastr.warning('请输入指令');
+  if (!cmd || !debugDeviceId.value) {
+    toastr.warning('请输入指令并选择设备');
     return;
   }
-
   try {
-    await send(cmd);
+    await sendToDevice(debugDeviceId.value, cmd);
     toastr.success('指令发送成功');
     commandInput.value = '';
   } catch (error) {
@@ -708,22 +763,9 @@ function parseFuncUnits(element: unknown[]): Array<{ funcCode: string; strength:
   return units;
 }
 
-function handleReplay() {
-  if (queueRunning.value) return;
-  if (lastExecutedQueue.value) {
-    queueInput.value = lastExecutedQueue.value;
-    handleExecuteQueue();
-  } else if (lastCommandRaw.value) {
-    queueInput.value = lastCommandRaw.value;
-    handleExecuteQueue();
-  }
-}
-
 async function handleExecuteQueue() {
   const input = queueInput.value.trim();
   if (!input) return;
-  lastExecutedQueue.value = input;
-  lastCommandRaw.value = input;
 
   let parsed: unknown[];
   try {
@@ -755,8 +797,7 @@ async function handleExecuteQueue() {
     cumulativeTime += duration;
     return cmd;
   });
-  const totalDuration = cumulativeTime;
-  const cycleTime = totalDuration > 0 ? totalDuration : 1;
+  const cycleTime = cumulativeTime > 0 ? cumulativeTime : 1;
 
   const queue: QueueItem[] = [];
   for (const cmd of commands) {
@@ -766,23 +807,11 @@ async function handleExecuteQueue() {
   }
   queue.sort((a, b) => a.time - b.time);
 
-  // console.log('[QueueTest] 解析指令:', { globalTime, cycleTime, commands, queue });
-
-  const waveformPoints: Array<{ funcCode: string; time: number; strength: number }> = [];
-  for (const cmd of commands) {
-    for (const fu of cmd.funcUnits) {
-      waveformPoints.push({ funcCode: fu.funcCode, time: cmd.time, strength: fu.strength });
-    }
-  }
-  waveformData.value = { globalTime: cycleTime, commands: waveformPoints };
-  waveformActive.value = true;
-
   queueAborted = false;
   queueRunning.value = true;
   const funcCodes: string[] = [...new Set(queue.map((item: QueueItem) => item.funcCode))];
   activeFuncCodes = funcCodes;
   const startedAt = Date.now();
-  let loopStartTime = startedAt;
 
   const cappedWait = (ms: number): Promise<void> => {
     if (globalTime > 0) {
@@ -801,14 +830,9 @@ async function handleExecuteQueue() {
     return false;
   };
 
-  const timeTracker = setInterval(() => {
-    waveformCurrentTime.value = (Date.now() - loopStartTime) % cycleTime;
-  }, 50);
-
   try {
     const executeOnce = async () => {
       let currentTime = 0;
-      loopStartTime = Date.now();
       for (const item of queue) {
         if (queueAborted) return;
         if (item.time > currentTime) {
@@ -816,7 +840,6 @@ async function handleExecuteQueue() {
           currentTime = item.time;
         }
         if (queueAborted || checkExpired()) return;
-        // console.log(`[QueueTest] funcCode=${item.funcCode}, 强度=${item.strength}, @${item.time}ms`);
         await sendFunctionStrength(item.funcCode, item.strength);
       }
       if (queueAborted || checkExpired()) return;
@@ -829,14 +852,11 @@ async function handleExecuteQueue() {
       checkExpired();
     }
   } finally {
-    clearInterval(timeTracker);
     for (const fc of activeFuncCodes) {
       try { await sendFunctionStrength(fc, 0); } catch { /* noop */ }
     }
     activeFuncCodes = [];
     queueRunning.value = false;
-    waveformCurrentTime.value = 0;
-    waveformActive.value = false;
   }
 }
 
@@ -898,11 +918,23 @@ function handleStopQueue() {
   visibility: visible;
 }
 
+.device-card {
+  border-bottom: 1px solid var(--SmartThemeBorderColor);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.device-card:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
 .status-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 40px;
 }
 
 .status-indicator {
@@ -922,18 +954,66 @@ function handleStopQueue() {
   color: #67c23a;
 }
 
+.device-disconnect-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.device-disconnect-btn:hover {
+  opacity: 1;
+}
+
 .product-avatar-wrapper {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.battery-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.battery-ring__track {
+  fill: none;
+  stroke: var(--SmartThemeBorderColor);
+  stroke-width: 2.5;
+  opacity: 0.3;
+}
+
+.battery-ring__fill {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease, stroke 0.3s ease;
 }
 
 .product-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   object-fit: cover;
-  cursor: pointer;
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+}
+
+.product-avatar-placeholder {
+  font-size: 14px;
+  color: var(--SmartThemeBodyColor);
+  opacity: 0.6;
+  position: relative;
+  z-index: 1;
 }
 
 .product-preview {
@@ -954,14 +1034,6 @@ function handleStopQueue() {
   z-index: 10000;
 }
 
-.battery-compact {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--SmartThemeBodyColor);
-}
-
 .command-bar {
   display: flex;
   align-items: center;
@@ -975,6 +1047,13 @@ function handleStopQueue() {
   padding: 6px 10px;
 }
 
+.debug-device-select {
+  width: 100px;
+  font-size: 12px;
+  padding: 6px 8px;
+  flex-shrink: 0;
+}
+
 .command-bar .action-icon {
   flex-shrink: 0;
 }
@@ -985,15 +1064,6 @@ function handleStopQueue() {
   color: var(--SmartThemeBodyColor);
   margin-bottom: 6px;
   opacity: 0.8;
-}
-
-.scenario-textarea {
-  width: 100%;
-  min-height: 60px;
-  resize: vertical;
-  font-size: 12px;
-  line-height: 1.4;
-  padding: 8px 10px;
 }
 
 .queue-textarea {
@@ -1013,7 +1083,6 @@ function handleStopQueue() {
   gap: 8px;
 }
 
-/* 设备控制模块样式 */
 .control-header {
   display: flex;
   align-items: center;

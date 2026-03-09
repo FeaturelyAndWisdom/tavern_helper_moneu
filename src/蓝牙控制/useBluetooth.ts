@@ -1,6 +1,6 @@
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
-const STORAGE_KEY = 'bluetooth_device_id';
+const STORAGE_KEY = 'bluetooth_device_ids';
 const NOTIFY_TIMEOUT = 5000;
 const RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -8,7 +8,6 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 // local
 const API_BASE_URL = 'http://localhost:8086';
 
-// 功能点信息类型
 export interface FunctionInfo {
   funcCode: string;
   funcDesc: string;
@@ -17,12 +16,11 @@ export interface FunctionInfo {
   minStrength: number;
 }
 
-// 设备运行信息类型
 export interface RuntimeConf {
   functions: FunctionInfo[];
+  deviceDesc: string;
 }
 
-// 设备信息类型
 export interface DeviceInfo {
   bgUrl: string;
   deviceName: string;
@@ -31,26 +29,36 @@ export interface DeviceInfo {
   runtimeConf?: RuntimeConf;
 }
 
-// 共享状态（单例模式）
-const isConnected = ref(false);
+export interface ConnectedDevice {
+  id: string;
+  name: string;
+  icon: string;
+  batteryLevel: number | null;
+  deviceInfo: DeviceInfo | null;
+  bluetoothDevice: BluetoothDevice;
+  writeCharacteristic: BluetoothRemoteGATTCharacteristic | null;
+  readCharacteristic: BluetoothRemoteGATTCharacteristic | null;
+  notifyTimer: ReturnType<typeof setTimeout> | null;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
+  reconnectAttempts: number;
+  isReconnecting: boolean;
+  manualDisconnect: boolean;
+}
+
+const devices = ref<Map<string, ConnectedDevice>>(new Map());
 const connecting = ref(false);
-const deviceName = ref('');
-const deviceIcon = ref('');
-const batteryLevel = ref<number | null>(null);
-const deviceInfo = ref<DeviceInfo | null>(null);
 const deviceScenario = ref('必定生成');
 
-const bluetoothDevice = ref<BluetoothDevice | null>(null);
-const bluetoothWriteCharacteristic = ref<BluetoothRemoteGATTCharacteristic | null>(null);
-const bluetoothReadCharacteristic = ref<BluetoothRemoteGATTCharacteristic | null>(null);
+const hasConnectedDevice = computed(() => devices.value.size > 0);
+const connectedDevices = computed(() => [...devices.value.values()]);
+const allDeviceInfos = computed(() =>
+  connectedDevices.value.map(d => d.deviceInfo).filter((d): d is DeviceInfo => d !== null),
+);
 
-// 指令序列相关
-const commandTimer = ref<ReturnType<typeof setTimeout> | null>(null);
-const currentCmdIndex = ref(0);
-const currentCmds = ref<Array<{ cmd: string; strength?: number; time: number }>>([]);
+const serviceUuid = '0000ffe0-0000-1000-8000-00805f9b34fb';
+const writeCharacteristicUuid = '0000ffe1-0000-1000-8000-00805f9b34fb';
+const readCharacteristicUuid = '0000ffe2-0000-1000-8000-00805f9b34fb';
 
-// 通过酒馆后端代理请求外部 API，避免 CORS 问题
-// 需在 SillyTavern 的 config.yaml 中启用 enableCorsProxy: true
 async function proxyFetch(url: string, options?: RequestInit): Promise<Response> {
   const response = await fetch(`/proxy/${url}`, {
     method: options?.method || 'GET',
@@ -66,7 +74,6 @@ async function proxyFetch(url: string, options?: RequestInit): Promise<Response>
   return response;
 }
 
-// API 调用获取设备信息
 async function getDeviceFromBlueToothApi(params: {
   blueToothName: string;
 }): Promise<{ data?: { device?: DeviceInfo } }> {
@@ -74,12 +81,8 @@ async function getDeviceFromBlueToothApi(params: {
     const targetUrl = `${API_BASE_URL}/moneu/api/resource/deviceFromBlueTooth?source=st`;
     const response = await proxyFetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        blueToothName: params.blueToothName,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blueToothName: params.blueToothName }),
     });
     return await response.json();
   } catch (error) {
@@ -88,22 +91,10 @@ async function getDeviceFromBlueToothApi(params: {
   }
 }
 
-let notifyTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectAttempts = 0;
-let isReconnecting = false;
-let manualDisconnect = false;
-
-const serviceUuid = '0000ffe0-0000-1000-8000-00805f9b34fb';
-const writeCharacteristicUuid = '0000ffe1-0000-1000-8000-00805f9b34fb';
-const readCharacteristicUuid = '0000ffe2-0000-1000-8000-00805f9b34fb';
-
-// 辅助函数
-const bytesToHex = (bytes: Uint8Array): string => {
-  return Array.from(bytes)
+const bytesToHex = (bytes: Uint8Array): string =>
+  Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0').toUpperCase())
     .join(' ');
-};
 
 const hexToBytes = (hex: string): Uint8Array => {
   hex = hex.replace(/\s/g, '');
@@ -119,15 +110,12 @@ const makeCheckSum = (data: string): string => {
   try {
     let dSum = 0;
     const cleanData = data.replace(/\s/g, '');
-    const length = cleanData.length;
     let index = 0;
-    while (index < length) {
-      const s = cleanData.substring(index, index + 2);
-      dSum += parseInt(s, 16);
+    while (index < cleanData.length) {
+      dSum += parseInt(cleanData.substring(index, index + 2), 16);
       index += 2;
     }
-    const mod = dSum % 256;
-    let checkSumHex = mod.toString(16).toUpperCase();
+    let checkSumHex = (dSum % 256).toString(16).toUpperCase();
     if (checkSumHex.length < 2) checkSumHex = '0' + checkSumHex;
     return checkSumHex;
   } catch (error) {
@@ -136,314 +124,311 @@ const makeCheckSum = (data: string): string => {
   }
 };
 
-const clearTimers = (): void => {
-  if (notifyTimer) {
-    clearTimeout(notifyTimer);
-    notifyTimer = null;
+function clearDeviceTimers(entry: ConnectedDevice): void {
+  if (entry.notifyTimer) {
+    clearTimeout(entry.notifyTimer);
+    entry.notifyTimer = null;
   }
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
+  if (entry.reconnectTimer) {
+    clearTimeout(entry.reconnectTimer);
+    entry.reconnectTimer = null;
   }
-};
+}
 
-const handleNotifyEvent = (event: Event): void => {
-  const target = event.target as BluetoothRemoteGATTCharacteristic;
-  const value = target.value;
-  if (!value) return;
+function makeNotifyHandler(deviceId: string) {
+  return (event: Event) => {
+    const target = event.target as BluetoothRemoteGATTCharacteristic;
+    const value = target.value;
+    if (!value) return;
 
-  const data = new Uint8Array(value.buffer);
-  const hex = bytesToHex(data);
-  if (hex.length >= 2) {
-    const batteryHex = hex.split(' ')[0];
-    batteryLevel.value = parseInt(batteryHex, 16);
-  }
-  resetNotifyTimer();
-};
+    const data = new Uint8Array(value.buffer);
+    const hex = bytesToHex(data);
+    if (hex.length >= 2) {
+      const batteryHex = hex.split(' ')[0];
+      const entry = devices.value.get(deviceId);
+      if (entry) {
+        entry.batteryLevel = parseInt(batteryHex, 16);
+        triggerReactivity();
+      }
+    }
+    resetNotifyTimer(deviceId);
+  };
+}
 
-const resetNotifyTimer = (): void => {
-  clearTimers();
-  notifyTimer = setTimeout(() => {
-    console.warn('[Bluetooth] 5s 内未收到设备上报，尝试重连');
-    if (!manualDisconnect) attemptReconnect();
+function triggerReactivity(): void {
+  devices.value = new Map(devices.value);
+}
+
+function resetNotifyTimer(deviceId: string): void {
+  const entry = devices.value.get(deviceId);
+  if (!entry) return;
+  clearDeviceTimers(entry);
+  entry.notifyTimer = setTimeout(() => {
+    console.warn(`[Bluetooth] 设备 ${entry.name} 5s 内未收到上报，尝试重连`);
+    if (!entry.manualDisconnect) attemptReconnect(deviceId);
   }, NOTIFY_TIMEOUT);
-};
+}
 
-const handleDisconnectEvent = (): void => {
-  console.log('[Bluetooth] 设备已断开连接');
-  isConnected.value = false;
-  batteryLevel.value = null;
-  bluetoothWriteCharacteristic.value = null;
-  bluetoothReadCharacteristic.value = null;
-  clearTimers();
-  if (!manualDisconnect) attemptReconnect();
-};
+function makeDisconnectHandler(deviceId: string) {
+  return () => {
+    const entry = devices.value.get(deviceId);
+    if (!entry) return;
+    console.log(`[Bluetooth] 设备 ${entry.name} 已断开连接`);
+    entry.batteryLevel = null;
+    entry.writeCharacteristic = null;
+    entry.readCharacteristic = null;
+    clearDeviceTimers(entry);
+    triggerReactivity();
+    if (!entry.manualDisconnect) attemptReconnect(deviceId);
+  };
+}
 
-const connectToDevice = async (device: BluetoothDevice): Promise<boolean> => {
-  try {
-    deviceName.value = device.name || '未知设备';
-    bluetoothDevice.value = device;
-    device.removeEventListener('gattserverdisconnected', handleDisconnectEvent);
-    device.addEventListener('gattserverdisconnected', handleDisconnectEvent);
+const disconnectHandlers = new Map<string, () => void>();
+const notifyHandlers = new Map<string, (event: Event) => void>();
 
-    console.log('[Bluetooth] 正在连接 GATT 服务器...');
-    const server = await device.gatt?.connect();
-    if (!server) throw new Error('无法连接到 GATT 服务器');
+async function connectToDevice(device: BluetoothDevice): Promise<ConnectedDevice> {
+  const deviceId = device.id;
+  const name = device.name || '未知设备';
 
-    console.log('[Bluetooth] 正在获取服务...');
-    const service = await server.getPrimaryService(serviceUuid);
-
-    console.log('[Bluetooth] 正在获取特征值...');
-    const readChar = await service?.getCharacteristic(readCharacteristicUuid);
-    bluetoothReadCharacteristic.value = readChar || null;
-
-    const writeChar = await service?.getCharacteristic(writeCharacteristicUuid);
-    bluetoothWriteCharacteristic.value = writeChar || null;
-
-    if (readChar) {
-      console.log('[Bluetooth] 正在启动通知...');
-      await readChar.startNotifications();
-      readChar.addEventListener('characteristicvaluechanged', handleNotifyEvent);
-      try {
-        const value = await readChar.readValue();
-        handleNotifyEvent({ target: { value } } as unknown as Event);
-      } catch (e) {
-        console.warn('[Bluetooth] 读取初始电量失败', e);
-      }
+  const existing = devices.value.get(deviceId);
+  if (existing) {
+    const oldDisconnectHandler = disconnectHandlers.get(deviceId);
+    if (oldDisconnectHandler) {
+      existing.bluetoothDevice.removeEventListener('gattserverdisconnected', oldDisconnectHandler);
     }
-
-    isConnected.value = true;
-    reconnectAttempts = 0;
-    isReconnecting = false;
-    resetNotifyTimer();
-
-    // 获取产品信息
-    if (deviceName.value) {
-      try {
-        const res = await getDeviceFromBlueToothApi({ blueToothName: deviceName.value });
-        const deviceData = res.data?.device;
-        if (deviceData) {
-          deviceIcon.value = deviceData.bgUrl || '';
-          deviceInfo.value = {
-            bgUrl: deviceData.bgUrl || '',
-            deviceName: deviceData.deviceName || deviceName.value,
-            deviceNo: deviceData.deviceNo,
-            productNo: deviceData.productNo,
-            runtimeConf: deviceData.runtimeConf,
-          };
-          console.log('[Bluetooth] 获取产品信息成功:', deviceInfo.value);
-        }
-      } catch (e) {
-        console.error('[Bluetooth] 获取设备资源失败', e);
-      }
-    }
-
-    try {
-      localStorage.setItem(STORAGE_KEY, device.id);
-    } catch {
-      console.warn('[Bluetooth] 无法保存设备 ID 到 localStorage');
-    }
-
-    return true;
-  } catch (error) {
-    console.error('[Bluetooth] 连接设备失败:', error);
-    isConnected.value = false;
-    throw error;
   }
-};
 
-const attemptReconnect = (): void => {
-  if (isReconnecting || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.warn(`[Bluetooth] 重连失败，已达到最大重试次数 ${MAX_RECONNECT_ATTEMPTS}`);
-      toastr.warning('设备连接已断开，请手动重新连接');
-      reconnectAttempts = 0;
+  const disconnectHandler = makeDisconnectHandler(deviceId);
+  disconnectHandlers.set(deviceId, disconnectHandler);
+  device.addEventListener('gattserverdisconnected', disconnectHandler);
+
+  console.log(`[Bluetooth] 正在连接 ${name} GATT 服务器...`);
+  const server = await device.gatt?.connect();
+  if (!server) throw new Error('无法连接到 GATT 服务器');
+
+  const service = await server.getPrimaryService(serviceUuid);
+  const readChar = await service?.getCharacteristic(readCharacteristicUuid);
+  const writeChar = await service?.getCharacteristic(writeCharacteristicUuid);
+
+  const notifyHandler = makeNotifyHandler(deviceId);
+  notifyHandlers.set(deviceId, notifyHandler);
+
+  if (readChar) {
+    await readChar.startNotifications();
+    readChar.addEventListener('characteristicvaluechanged', notifyHandler);
+  }
+
+  const entry: ConnectedDevice = {
+    id: deviceId,
+    name,
+    icon: '',
+    batteryLevel: null,
+    deviceInfo: null,
+    bluetoothDevice: device,
+    writeCharacteristic: writeChar || null,
+    readCharacteristic: readChar || null,
+    notifyTimer: null,
+    reconnectTimer: null,
+    reconnectAttempts: 0,
+    isReconnecting: false,
+    manualDisconnect: false,
+  };
+
+  devices.value.set(deviceId, entry);
+  triggerReactivity();
+  resetNotifyTimer(deviceId);
+
+  if (readChar) {
+    try {
+      const value = await readChar.readValue();
+      notifyHandler({ target: { value } } as unknown as Event);
+    } catch (e) {
+      console.warn(`[Bluetooth] 读取 ${name} 初始电量失败`, e);
+    }
+  }
+
+  if (name) {
+    try {
+      const res = await getDeviceFromBlueToothApi({ blueToothName: name });
+      const deviceData = res.data?.device;
+      if (deviceData) {
+        entry.icon = deviceData.bgUrl || '';
+        entry.deviceInfo = {
+          bgUrl: deviceData.bgUrl || '',
+          deviceName: deviceData.deviceName || name,
+          deviceNo: deviceData.deviceNo,
+          productNo: deviceData.productNo,
+          runtimeConf: deviceData.runtimeConf,
+        };
+        console.log(`[Bluetooth] 获取 ${name} 产品信息成功:`, entry.deviceInfo);
+        triggerReactivity();
+      }
+    } catch (e) {
+      console.error(`[Bluetooth] 获取 ${name} 设备资源失败`, e);
+    }
+  }
+
+  saveDeviceIds();
+  return entry;
+}
+
+function attemptReconnect(deviceId: string): void {
+  const entry = devices.value.get(deviceId);
+  if (!entry) return;
+  if (entry.isReconnecting || entry.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    if (entry.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn(`[Bluetooth] ${entry.name} 重连失败，已达最大重试次数`);
+      toastr.warning(`设备 ${entry.name} 连接已断开，请手动重新连接`);
+      devices.value.delete(deviceId);
+      triggerReactivity();
+      saveDeviceIds();
     }
     return;
   }
-  isReconnecting = true;
-  reconnectAttempts++;
-  reconnectTimer = setTimeout(async () => {
+  entry.isReconnecting = true;
+  entry.reconnectAttempts++;
+  entry.reconnectTimer = setTimeout(async () => {
     try {
-      if (bluetoothDevice.value?.gatt) {
+      if (entry.bluetoothDevice.gatt) {
         connecting.value = true;
-        if (!bluetoothDevice.value.gatt.connected) {
-          await connectToDevice(bluetoothDevice.value);
+        if (!entry.bluetoothDevice.gatt.connected) {
+          await connectToDevice(entry.bluetoothDevice);
         } else {
-          isConnected.value = true;
-          reconnectAttempts = 0;
-          isReconnecting = false;
-          resetNotifyTimer();
+          entry.reconnectAttempts = 0;
+          entry.isReconnecting = false;
+          resetNotifyTimer(deviceId);
         }
       }
-    } catch (error) {
-      isReconnecting = false;
-      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) attemptReconnect();
+    } catch {
+      entry.isReconnecting = false;
+      if (entry.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) attemptReconnect(deviceId);
     } finally {
       connecting.value = false;
     }
   }, RECONNECT_DELAY);
-};
+}
 
-const disconnect = (): void => {
-  manualDisconnect = true;
-  stopCommandSequence();
-  clearTimers();
-  reconnectAttempts = 0;
-  isReconnecting = false;
-  if (bluetoothDevice.value?.gatt?.connected) {
-    bluetoothDevice.value.gatt.disconnect();
+function disconnectDevice(deviceId: string): void {
+  const entry = devices.value.get(deviceId);
+  if (!entry) return;
+
+  entry.manualDisconnect = true;
+  clearDeviceTimers(entry);
+  entry.reconnectAttempts = 0;
+  entry.isReconnecting = false;
+
+  if (entry.bluetoothDevice.gatt?.connected) {
+    entry.bluetoothDevice.gatt.disconnect();
   }
-  isConnected.value = false;
-  batteryLevel.value = null;
-  bluetoothWriteCharacteristic.value = null;
-  bluetoothReadCharacteristic.value = null;
-  deviceName.value = '';
-  deviceIcon.value = '';
-  deviceInfo.value = null;
+
+  devices.value.delete(deviceId);
+  triggerReactivity();
+  saveDeviceIds();
+}
+
+function disconnectAll(): void {
+  for (const deviceId of [...devices.value.keys()]) {
+    disconnectDevice(deviceId);
+  }
+}
+
+function saveDeviceIds(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, '');
+    const ids = [...devices.value.keys()];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
   } catch {
-    console.warn('[Bluetooth] 无法清除 localStorage 中的设备 ID');
-  }
-};
-
-// 指令序列管理
-function stopCommandSequence(): void {
-  console.log('[Bluetooth] 停止指令序列');
-  if (commandTimer.value) {
-    clearTimeout(commandTimer.value);
-    commandTimer.value = null;
-  }
-  currentCmds.value = [];
-}
-
-function startCommandSequence(cmds: Array<{ cmd: string; strength?: number; time: number }>): void {
-  if (!cmds || cmds.length === 0) {
-    console.warn('[Bluetooth] 尝试启动空指令序列，正在停止当前序列');
-    stopCommandSequence();
-    return;
-  }
-
-  if (commandTimer.value && JSON.stringify(cmds) === JSON.stringify(currentCmds.value)) {
-    console.log('[Bluetooth] 指令序列一致且正在运行，跳过重置');
-    return;
-  }
-
-  console.log(`[Bluetooth] 启动新指令序列, 指令数: ${cmds.length}`);
-  stopCommandSequence();
-
-  currentCmds.value = [...cmds];
-  currentCmdIndex.value = 0;
-
-  const runNext = (): void => {
-    if (!isConnected.value) {
-      console.warn('[Bluetooth] 设备未连接，停止指令序列');
-      stopCommandSequence();
-      return;
-    }
-
-    if (currentCmds.value.length === 0) {
-      console.log('[Bluetooth] 指令序列为空，正常退出');
-      stopCommandSequence();
-      return;
-    }
-
-    const item = currentCmds.value[currentCmdIndex.value];
-    if (!item) {
-      console.warn(`[Bluetooth] 找不到索引为 ${currentCmdIndex.value} 的指令，停止序列`);
-      stopCommandSequence();
-      return;
-    }
-
-    console.log(
-      `[Bluetooth] 正在执行序列指令 (索引 ${currentCmdIndex.value}/${currentCmds.value.length}): ${item.cmd}, 强度: ${item.strength}, 预期时长: ${item.time}ms`,
-    );
-
-    sendInternal(item.cmd).catch(err => {
-      console.error('[Bluetooth] 指令执行失败:', err);
-    });
-
-    currentCmdIndex.value = (currentCmdIndex.value + 1) % currentCmds.value.length;
-
-    if (currentCmds.value.length === 1 && item.time === 0) {
-      commandTimer.value = null;
-      return;
-    }
-
-    commandTimer.value = setTimeout(runNext, item.time || 0);
-  };
-
-  runNext();
-}
-
-async function sendInternal(cmdText: string, appendChecksum = true): Promise<boolean> {
-  if (!isConnected.value || !bluetoothDevice.value) {
-    throw new Error('设备未连接');
-  }
-
-  try {
-    let finalCmdText = cmdText.replace(/\s/g, '');
-    if (appendChecksum) {
-      const checksum = makeCheckSum(cmdText);
-      finalCmdText += checksum;
-    }
-
-    const data = hexToBytes(finalCmdText);
-
-    let char = bluetoothWriteCharacteristic.value;
-    if (!char && bluetoothDevice.value.gatt) {
-      console.log('[Bluetooth] 重新获取写特征值...');
-      const server = await bluetoothDevice.value.gatt.connect();
-      const service = await server.getPrimaryService(serviceUuid);
-      char = await service.getCharacteristic(writeCharacteristicUuid);
-      bluetoothWriteCharacteristic.value = char;
-    }
-
-    if (!char) {
-      throw new Error('无法获取写特征值');
-    }
-
-    await char.writeValue(data);
-    return true;
-  } catch (error) {
-    console.error('[Bluetooth] 发送指令失败:', error);
-    throw error;
+    console.warn('[Bluetooth] 无法保存设备 ID 列表到 localStorage');
   }
 }
 
-// 根据功能点和强度组装并发送单指令
-async function sendFunctionStrength(funcCode: string, strength: number): Promise<boolean> {
-  if (!isConnected.value || !deviceInfo.value?.runtimeConf?.functions) {
-    console.warn('[Bluetooth] 设备未连接或没有功能点信息');
+async function sendToDevice(deviceId: string, cmdText: string, appendChecksum = true): Promise<boolean> {
+  const entry = devices.value.get(deviceId);
+  if (!entry) throw new Error(`设备 ${deviceId} 未连接`);
+
+  let finalCmdText = cmdText.replace(/\s/g, '');
+  if (appendChecksum) {
+    finalCmdText += makeCheckSum(cmdText);
+  }
+
+  const data = hexToBytes(finalCmdText);
+  let char = entry.writeCharacteristic;
+  if (!char && entry.bluetoothDevice.gatt) {
+    const server = await entry.bluetoothDevice.gatt.connect();
+    const service = await server.getPrimaryService(serviceUuid);
+    char = await service.getCharacteristic(writeCharacteristicUuid);
+    entry.writeCharacteristic = char;
+  }
+  if (!char) throw new Error('无法获取写特征值');
+
+  await char.writeValue(data);
+  return true;
+}
+
+async function sendFunctionStrengthToDevice(
+  deviceId: string,
+  funcCode: string,
+  strength: number,
+): Promise<boolean> {
+  const entry = devices.value.get(deviceId);
+  if (!entry?.deviceInfo?.runtimeConf?.functions) {
+    console.warn(`[Bluetooth] 设备 ${deviceId} 未连接或没有功能点信息`);
     return false;
   }
 
-  const funcInfo = deviceInfo.value.runtimeConf.functions.find(f => f.funcCode === funcCode);
+  const funcInfo = entry.deviceInfo.runtimeConf.functions.find(f => f.funcCode === funcCode);
   if (!funcInfo) {
-    console.warn(`[Bluetooth] 找不到功能点: ${funcCode}`);
+    console.warn(`[Bluetooth] 设备 ${deviceId} 找不到功能点: ${funcCode}`);
     return false;
   }
 
   const rounded = Math.round(strength);
-  const clampedStrength = rounded === 0 ? 0 : Math.max(funcInfo.minStrength, Math.min(funcInfo.maxStrength, rounded));
-  const strengthHex = clampedStrength.toString(16).padStart(2, '0').toUpperCase();
+  const clamped = rounded === 0 ? 0 : Math.max(funcInfo.minStrength, Math.min(funcInfo.maxStrength, rounded));
+  const strengthHex = clamped.toString(16).padStart(2, '0').toUpperCase();
   const funcCodeHex = funcCode.padStart(2, '0').toUpperCase();
-  const deviceNo = deviceInfo.value.deviceNo;
+  const deviceNo = entry.deviceInfo.deviceNo;
 
-  // 组装指令: deviceNo + funcCode + 强度16进制 + 00
   const cmd = `${deviceNo} ${funcCodeHex} ${strengthHex} 00`;
-
   try {
-    await sendInternal(cmd);
+    await sendToDevice(deviceId, cmd);
     return true;
   } catch (error) {
-    console.error('[Bluetooth] 发送功能点指令失败:', error);
+    console.error(`[Bluetooth] 发送功能点指令失败 (设备 ${entry.name}):`, error);
     return false;
   }
 }
 
-// Hook 定义
+function findDeviceByDeviceNo(deviceNo: string): ConnectedDevice | undefined {
+  for (const entry of devices.value.values()) {
+    if (entry.deviceInfo?.deviceNo === deviceNo) return entry;
+  }
+  return undefined;
+}
+
+async function sendFunctionStrengthByDeviceNo(
+  deviceNo: string,
+  funcCode: string,
+  strength: number,
+): Promise<boolean> {
+  const entry = findDeviceByDeviceNo(deviceNo);
+  if (!entry) {
+    console.warn(`[Bluetooth] 找不到 deviceNo=${deviceNo} 的设备`);
+    return false;
+  }
+  return sendFunctionStrengthToDevice(entry.id, funcCode, strength);
+}
+
+/** 向所有已连接设备的指定功能点发送强度（兼容旧单设备调用） */
+async function sendFunctionStrength(funcCode: string, strength: number): Promise<boolean> {
+  let success = false;
+  for (const entry of devices.value.values()) {
+    try {
+      const result = await sendFunctionStrengthToDevice(entry.id, funcCode, strength);
+      if (result) success = true;
+    } catch { /* skip */ }
+  }
+  return success;
+}
+
 export function useBluetooth() {
   const connect = async (): Promise<void> => {
     if (!('bluetooth' in navigator)) {
@@ -451,14 +436,19 @@ export function useBluetooth() {
       return;
     }
     connecting.value = true;
-    manualDisconnect = false;
     try {
       const device = await (navigator as Navigator & { bluetooth: Bluetooth }).bluetooth.requestDevice({
         filters: [{ namePrefix: 'MY' }],
         optionalServices: [serviceUuid],
       });
+
+      if (devices.value.has(device.id)) {
+        toastr.info('该设备已连接');
+        return;
+      }
+
       await connectToDevice(device);
-      toastr.success('蓝牙连接成功');
+      toastr.success(`蓝牙设备 ${device.name || '未知'} 连接成功`);
     } catch (error) {
       if ((error as Error).name !== 'NotFoundError') {
         toastr.error(`连接失败: ${(error as Error).message}`);
@@ -469,25 +459,31 @@ export function useBluetooth() {
   };
 
   const autoReconnect = async (): Promise<void> => {
-    let deviceId: string | null = null;
+    let ids: string[] = [];
     try {
-      deviceId = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) ids = JSON.parse(raw);
     } catch {
       return;
     }
-
-    if (!deviceId || isConnected.value || connecting.value) return;
+    if (ids.length === 0 || connecting.value) return;
 
     const nav = navigator as Navigator & { bluetooth?: Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> } };
     if (!nav.bluetooth?.getDevices) return;
 
     try {
       connecting.value = true;
-      manualDisconnect = false;
-      const devices = await nav.bluetooth.getDevices();
-      const cachedDevice = devices.find(d => d.id === deviceId);
-      if (cachedDevice) {
-        await connectToDevice(cachedDevice);
+      const knownDevices = await nav.bluetooth.getDevices();
+      for (const id of ids) {
+        if (devices.value.has(id)) continue;
+        const cached = knownDevices.find(d => d.id === id);
+        if (cached) {
+          try {
+            await connectToDevice(cached);
+          } catch (e) {
+            console.error(`[Bluetooth] 自动重连设备 ${id} 失败:`, e);
+          }
+        }
       }
     } catch (error) {
       console.error('[Bluetooth] 自动重连失败:', error);
@@ -496,29 +492,26 @@ export function useBluetooth() {
     }
   };
 
-  const send = async (cmdText: string, appendChecksum = true): Promise<boolean> => {
-    return await sendInternal(cmdText, appendChecksum);
-  };
-
   onMounted(() => {
-    if (!isConnected.value && !connecting.value) {
+    if (devices.value.size === 0 && !connecting.value) {
       autoReconnect();
     }
   });
 
   return {
-    isConnected,
+    devices,
     connecting,
-    deviceName,
-    deviceIcon,
-    batteryLevel,
-    deviceInfo,
+    hasConnectedDevice,
+    connectedDevices,
+    allDeviceInfos,
     deviceScenario,
     connect,
-    disconnect,
-    send,
+    disconnectDevice,
+    disconnectAll,
+    sendToDevice,
     sendFunctionStrength,
-    startCommandSequence,
-    stopCommandSequence,
+    sendFunctionStrengthToDevice,
+    sendFunctionStrengthByDeviceNo,
+    findDeviceByDeviceNo,
   };
 }

@@ -1,9 +1,16 @@
 {
+<<<<<<< HEAD
   "type": "module",
   "scripts": {
     "build:dev": "cross-env NODE_OPTIONS=\"--import tsx\" webpack --mode development",
     "build": "cross-env NODE_OPTIONS=\"--import tsx\" webpack --mode production",
     "watch": "cross-env NODE_OPTIONS=\"--import tsx\" webpack --mode development --watch --progress",
+=======
+  "scripts": {
+    "build:dev": "webpack --mode development",
+    "build": "webpack --mode production",
+    "watch": "webpack --mode development --watch --progress",
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,scss,html,vue}\" --no-error-on-unmatched-pattern",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
@@ -27,7 +34,10 @@
     "@typescript-eslint/parser": "^8.57.0",
     "autoprefixer": "^10.4.27",
     "chokidar": "^4.0.3",
+<<<<<<< HEAD
     "cross-env": "^10.1.0",
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     "css-loader": "^7.1.4",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
@@ -65,7 +75,10 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths-webpack-plugin": "^4.2.0",
     "tslib": "^2.8.1",
+<<<<<<< HEAD
     "tsx": "^4.21.0",
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     "type-fest": "^4.41.0",
     "typescript": "6.0.0-dev.20250807",
     "typescript-eslint": "^8.57.0",

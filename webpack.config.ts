@@ -7,9 +7,12 @@ import { ChildProcess, exec, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+<<<<<<< HEAD
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
 import RemarkHTML from 'remark-html';
 import { Server } from 'socket.io';
 import TerserPlugin from 'terser-webpack-plugin';
@@ -56,7 +59,11 @@ function glob_script_files() {
 
   fs.globSync(`{示例,src}/**/index.{ts,tsx,js,jsx}`)
     .filter(
+<<<<<<< HEAD
       file => process.env.CI !== 'true' || !fs.readFileSync(path.join(__dirname, file)).includes('@no-ci'),
+=======
+      file => process.env.CI !== 'true' || !fs.readFileSync(path.join(import.meta.dirname, file)).includes('@no-ci'),
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     )
     .forEach(file => {
       const file_dirname = path.dirname(file);
@@ -111,7 +118,11 @@ function watch_tavern_helper(compiler: webpack.Compiler) {
 
 let watcher: FSWatcher;
 const dump = () => {
+<<<<<<< HEAD
   exec('pnpm dump', { cwd: __dirname });
+=======
+  exec('pnpm dump', { cwd: import.meta.dirname });
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   console.info('\x1b[36m[schema_dump]\x1b[0m 已将所有 schema.ts 转换为 schema.json');
 };
 const dump_debounced = _.debounce(dump, 500, { leading: true, trailing: false });
@@ -133,7 +144,11 @@ function schema_dump(compiler: webpack.Compiler) {
 
 let child_process: ChildProcess;
 const bundle = () => {
+<<<<<<< HEAD
   exec('pnpm sync bundle all', { cwd: __dirname });
+=======
+  exec('pnpm sync bundle all', { cwd: import.meta.dirname });
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   console.info('\x1b[36m[tavern_sync]\x1b[0m 已打包所有配置了的角色卡/世界书/预设');
 };
 const bundle_debounced = _.debounce(bundle, 500, { leading: true, trailing: false });
@@ -147,7 +162,11 @@ function tavern_sync(compiler: webpack.Compiler) {
       child_process = spawn('pnpm', ['sync', 'watch', 'all', '-f'], {
         shell: true,
         stdio: ['ignore', 'pipe', 'pipe'],
+<<<<<<< HEAD
         cwd: __dirname,
+=======
+        cwd: import.meta.dirname,
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
         env: { ...process.env, FORCE_COLOR: '1' },
       });
       child_process.stdout?.on('data', (data: Buffer) => {
@@ -187,7 +206,11 @@ function tavern_sync(compiler: webpack.Compiler) {
 
 function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Configuration {
   const should_obfuscate = fs
+<<<<<<< HEAD
     .readFileSync(path.join(__dirname, entry.script), 'utf-8')
+=======
+    .readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8')
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     .includes('@obfuscate');
   const script_filepath = path.parse(entry.script);
 
@@ -199,7 +222,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
     watchOptions: {
       ignored: ['**/dist', '**/node_modules'],
     },
+<<<<<<< HEAD
     entry: path.join(__dirname, entry.script),
+=======
+    entry: path.join(import.meta.dirname, entry.script),
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     target: 'browserslist',
     output: {
       devtoolNamespace: 'tavern_helper_template',
@@ -215,9 +242,15 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       },
       filename: `${script_filepath.name}.js`,
       path: path.join(
+<<<<<<< HEAD
         __dirname,
         'dist',
         path.relative(__dirname, script_filepath.dir).replace(/^[^\\/]+[\\/]/, ''),
+=======
+        import.meta.dirname,
+        'dist',
+        path.relative(import.meta.dirname, script_filepath.dir).replace(/^[^\\/]+[\\/]/, ''),
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       ),
       chunkFilename: `${script_filepath.name}.[contenthash].chunk.js`,
       asyncChunks: true,
@@ -416,7 +449,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       plugins: [
         new TsconfigPathsPlugin({
           extensions: ['.ts', '.js', '.tsx', '.jsx'],
+<<<<<<< HEAD
           configFile: path.join(__dirname, 'tsconfig.json'),
+=======
+          configFile: path.join(import.meta.dirname, 'tsconfig.json'),
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
         }),
       ],
       alias: {},
@@ -425,7 +462,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       ? [new MiniCssExtractPlugin()]
       : [
           new HtmlWebpackPlugin({
+<<<<<<< HEAD
             template: path.join(__dirname, entry.html),
+=======
+            template: path.join(import.meta.dirname, entry.html),
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
             filename: path.parse(entry.html).base,
             scriptLoading: 'module',
             cache: false,

@@ -19,7 +19,11 @@ importers:
         version: 13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807))
       '@vueuse/integrations':
         specifier: ^13.9.0
+<<<<<<< HEAD
         version: 13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807))
+=======
+        version: 13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807))
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       '@vueuse/shared':
         specifier: ^13.9.0
         version: 13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807))
@@ -73,7 +77,11 @@ importers:
         version: 3.5.30(typescript@6.0.0-dev.20250807)
       vue-final-modal:
         specifier: ^4.5.5
+<<<<<<< HEAD
         version: 4.5.5(@vueuse/core@13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807)))(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807))
+=======
+        version: 4.5.5(@vueuse/core@13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807)))(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807))
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.30(typescript@6.0.0-dev.20250807))
@@ -129,9 +137,12 @@ importers:
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
+<<<<<<< HEAD
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       css-loader:
         specifier: ^7.1.4
         version: 7.1.4(webpack@5.105.4)
@@ -191,10 +202,17 @@ importers:
         version: 8.5.8
       postcss-cli:
         specifier: ^11.0.1
+<<<<<<< HEAD
         version: 11.0.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)
       postcss-load-config:
         specifier: ^6.0.1
         version: 6.0.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(yaml@2.8.2)
+=======
+        version: 11.0.1(jiti@2.6.1)(postcss@8.5.8)
+      postcss-load-config:
+        specifier: ^6.0.1
+        version: 6.0.1(jiti@2.6.1)(postcss@8.5.8)(yaml@2.8.2)
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       postcss-loader:
         specifier: ^8.2.1
         version: 8.2.1(postcss@8.5.8)(typescript@6.0.0-dev.20250807)(webpack@5.105.4)
@@ -243,9 +261,12 @@ importers:
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
+<<<<<<< HEAD
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       type-fest:
         specifier: ^4.41.0
         version: 4.41.0
@@ -330,6 +351,7 @@ packages:
   '@emnapi/wasi-threads@1.1.0':
     resolution: {integrity: sha512-WI0DdZ8xFSbgMjR1sFsKABJ/C5OnRrjT06JXbZKexJGrDuPTzZdDYfFlsgcCXCyf+suG5QU2e/y1Wo2V/OapLQ==}
 
+<<<<<<< HEAD
   '@epic-web/invariant@1.0.0':
     resolution: {integrity: sha512-lrTPqgvfFQtR/eY/qkIzp98OGdNJu0m5ji3q/nJI8v3SXkRKEnWiOxMmbvcSoAIzv/cGiuvRy57k4suKQSAdwA==}
 
@@ -489,6 +511,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   '@eslint-community/eslint-utils@4.9.1':
     resolution: {integrity: sha512-phrYmNiYppR7znFEdqgfWHXR6NCkZEK7hwWDHZUjit/2/U0r6XvkDl0SYnoM51Hq7FhCGdLDT6zxCCOY1hexsQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
@@ -1679,11 +1703,14 @@ packages:
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
 
+<<<<<<< HEAD
   cross-env@10.1.0:
     resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
     engines: {node: '>=20'}
     hasBin: true
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
@@ -1983,11 +2010,14 @@ packages:
     resolution: {integrity: sha512-w+5mJ3GuFL+NjVtJlvydShqE1eN3h3PbI7/5LAsYJP/2qtuMXjfL2LpHSRqo4b4eSF5K/DH1JXKUAHSB2UW50g==}
     engines: {node: '>= 0.4'}
 
+<<<<<<< HEAD
   esbuild@0.27.3:
     resolution: {integrity: sha512-8VwMnyGCONIs6cWue2IdpHxHnAjzxnw2Zr7MkVxB2vjmQ2ivqGFb4LEG3SMnv0Gb2F/G/2yA8zUaiL1gywDCCg==}
     engines: {node: '>=18'}
     hasBin: true
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   escalade@3.2.0:
     resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
     engines: {node: '>=6'}
@@ -2227,8 +2257,13 @@ packages:
   flatted@3.4.1:
     resolution: {integrity: sha512-IxfVbRFVlV8V/yRaGzk0UVIcsKKHMSfYw66T/u4nTwlWteQePsxe//LjudR1AMX4tZW3WFCh3Zqa/sjlqpbURQ==}
 
+<<<<<<< HEAD
   focus-trap@7.8.0:
     resolution: {integrity: sha512-/yNdlIkpWbM0ptxno3ONTuf+2g318kh2ez3KSeZN5dZ8YC6AAmgeWz+GasYYiBJPFaYcSAPeu4GfhUaChzIJXA==}
+=======
+  focus-trap@7.6.5:
+    resolution: {integrity: sha512-7Ke1jyybbbPZyZXFxEftUtxFGLMpE2n6A+z//m4CRDlj0hW+o3iYSmh8nFlYMurOiJVDmJRilUQtJr08KfIxlg==}
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
 
   follow-redirects@1.15.11:
     resolution: {integrity: sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ==}
@@ -3894,11 +3929,14 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+<<<<<<< HEAD
   tsx@4.21.0:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   type-check@0.3.2:
     resolution: {integrity: sha512-ZCmOJdvOWDBYJlzAoFkC+Q0+bUyEOS1ltgp1MGU03fqHG+dbi9tBFU2Rd9QKiDZFAYrhPh2JUf7rZRIuHRKtOg==}
     engines: {node: '>= 0.8.0'}
@@ -4316,6 +4354,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+<<<<<<< HEAD
   '@epic-web/invariant@1.0.0': {}
 
   '@esbuild/aix-ppc64@0.27.3':
@@ -4396,6 +4435,8 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   '@eslint-community/eslint-utils@4.9.1(eslint@9.39.4(jiti@2.6.1))':
     dependencies:
       eslint: 9.39.4(jiti@2.6.1)
@@ -5062,14 +5103,22 @@ snapshots:
       '@vueuse/shared': 14.2.1(vue@3.5.30(typescript@6.0.0-dev.20250807))
       vue: 3.5.30(typescript@6.0.0-dev.20250807)
 
+<<<<<<< HEAD
   '@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807))':
+=======
+  '@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807))':
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     dependencies:
       '@vueuse/core': 13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807))
       '@vueuse/shared': 13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807))
       vue: 3.5.30(typescript@6.0.0-dev.20250807)
     optionalDependencies:
       axios: 1.13.6
+<<<<<<< HEAD
       focus-trap: 7.8.0
+=======
+      focus-trap: 7.6.5
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
 
   '@vueuse/metadata@10.11.1': {}
 
@@ -5602,11 +5651,14 @@ snapshots:
 
   create-require@1.1.1: {}
 
+<<<<<<< HEAD
   cross-env@10.1.0:
     dependencies:
       '@epic-web/invariant': 1.0.0
       cross-spawn: 7.0.6
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -5973,6 +6025,7 @@ snapshots:
       is-date-object: 1.1.0
       is-symbol: 1.1.1
 
+<<<<<<< HEAD
   esbuild@0.27.3:
     optionalDependencies:
       '@esbuild/aix-ppc64': 0.27.3
@@ -6002,6 +6055,8 @@ snapshots:
       '@esbuild/win32-ia32': 0.27.3
       '@esbuild/win32-x64': 0.27.3
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   escalade@3.2.0: {}
 
   escape-string-regexp@1.0.5: {}
@@ -6254,7 +6309,11 @@ snapshots:
 
   flatted@3.4.1: {}
 
+<<<<<<< HEAD
   focus-trap@7.8.0:
+=======
+  focus-trap@7.6.5:
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     dependencies:
       tabbable: 6.4.0
 
@@ -7444,14 +7503,22 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
+<<<<<<< HEAD
   postcss-cli@11.0.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0):
+=======
+  postcss-cli@11.0.1(jiti@2.6.1)(postcss@8.5.8):
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     dependencies:
       chokidar: 3.6.0
       dependency-graph: 1.0.0
       fs-extra: 11.3.4
       picocolors: 1.1.1
       postcss: 8.5.8
+<<<<<<< HEAD
       postcss-load-config: 5.1.0(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)
+=======
+      postcss-load-config: 5.1.0(jiti@2.6.1)(postcss@8.5.8)
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       postcss-reporter: 7.1.0(postcss@8.5.8)
       pretty-hrtime: 1.0.3
       read-cache: 1.0.0
@@ -7469,22 +7536,34 @@ snapshots:
       read-cache: 1.0.0
       resolve: 1.22.11
 
+<<<<<<< HEAD
   postcss-load-config@5.1.0(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0):
+=======
+  postcss-load-config@5.1.0(jiti@2.6.1)(postcss@8.5.8):
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     dependencies:
       lilconfig: 3.1.3
       yaml: 2.8.2
     optionalDependencies:
       jiti: 2.6.1
       postcss: 8.5.8
+<<<<<<< HEAD
       tsx: 4.21.0
 
   postcss-load-config@6.0.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(yaml@2.8.2):
+=======
+
+  postcss-load-config@6.0.1(jiti@2.6.1)(postcss@8.5.8)(yaml@2.8.2):
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
     dependencies:
       lilconfig: 3.1.3
     optionalDependencies:
       jiti: 2.6.1
       postcss: 8.5.8
+<<<<<<< HEAD
       tsx: 4.21.0
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       yaml: 2.8.2
 
   postcss-loader@8.2.1(postcss@8.5.8)(typescript@6.0.0-dev.20250807)(webpack@5.105.4):
@@ -8090,6 +8169,7 @@ snapshots:
 
   tslib@2.8.1: {}
 
+<<<<<<< HEAD
   tsx@4.21.0:
     dependencies:
       esbuild: 0.27.3
@@ -8097,6 +8177,8 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
+=======
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
   type-check@0.3.2:
     dependencies:
       prelude-ls: 1.1.2
@@ -8350,11 +8432,19 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+<<<<<<< HEAD
   vue-final-modal@4.5.5(@vueuse/core@13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807)))(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807)):
     dependencies:
       '@vueuse/core': 13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807))
       '@vueuse/integrations': 13.9.0(axios@1.13.6)(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.0-dev.20250807))
       focus-trap: 7.8.0
+=======
+  vue-final-modal@4.5.5(@vueuse/core@13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807)))(@vueuse/integrations@13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807)))(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807)):
+    dependencies:
+      '@vueuse/core': 13.9.0(vue@3.5.30(typescript@6.0.0-dev.20250807))
+      '@vueuse/integrations': 13.9.0(axios@1.13.6)(focus-trap@7.6.5)(vue@3.5.30(typescript@6.0.0-dev.20250807))
+      focus-trap: 7.6.5
+>>>>>>> da0118dfd92c2c94f015b40b73e9666c996c3fe8
       vue: 3.5.30(typescript@6.0.0-dev.20250807)
 
   vue-loader@17.4.2(vue@3.5.30(typescript@6.0.0-dev.20250807))(webpack@5.105.4):

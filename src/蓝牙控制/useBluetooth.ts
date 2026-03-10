@@ -48,6 +48,7 @@ export interface ConnectedDevice {
 const devices = ref<Map<string, ConnectedDevice>>(new Map());
 const connecting = ref(false);
 const deviceScenario = ref('必定生成');
+const promptInjectionEnabled = ref(true);
 
 const hasConnectedDevice = computed(() => devices.value.size > 0);
 const connectedDevices = computed(() => [...devices.value.values()]);
@@ -505,6 +506,7 @@ export function useBluetooth() {
     connectedDevices,
     allDeviceInfos,
     deviceScenario,
+    promptInjectionEnabled,
     connect,
     disconnectDevice,
     disconnectAll,

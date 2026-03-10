@@ -143,6 +143,17 @@
         </div>
       </div>
 
+      <!-- 注入提示词开关 -->
+      <div v-if="connectedDevices.length > 0" class="floating-window__section prompt-inject-section">
+        <div class="prompt-inject-row">
+          <label class="section-label">注入提示词</label>
+          <label class="toggle-switch">
+            <input v-model="promptInjectionEnabled" type="checkbox" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
       <!-- 调试: 指令发送 -->
       <div v-if="debugMode && connectedDevices.length > 0" class="floating-window__section">
         <div class="command-bar">
@@ -277,6 +288,7 @@ const {
   sendToDevice,
   sendFunctionStrengthToDevice,
   sendFunctionStrength,
+  promptInjectionEnabled,
 } = useBluetooth();
 watch(connectedDevices, (devs) => {
   if (devs.length > 0 && !debugDeviceId.value) {
@@ -1260,5 +1272,58 @@ function handleStopQueue() {
   border-radius: 10px;
   white-space: nowrap;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.prompt-inject-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prompt-inject-row .section-label {
+  margin-bottom: 0;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--SmartThemeBorderColor, #555);
+  border-radius: 10px;
+  transition: background 0.25s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.25s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: #67c23a;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
 }
 </style>

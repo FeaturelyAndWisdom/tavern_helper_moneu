@@ -4,9 +4,7 @@ const STORAGE_KEY = 'bluetooth_device_ids';
 const NOTIFY_TIMEOUT = 5000;
 const RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_ATTEMPTS = 3;
-// const API_BASE_URL = 'https://moneu-test.moneu.cn';
-// local
-const API_BASE_URL = 'http://localhost:8086';
+const API_BASE_URL = 'https://moneu-test.moneu.cn';
 
 export interface FunctionInfo {
   funcCode: string;
@@ -47,7 +45,6 @@ export interface ConnectedDevice {
 
 const devices = ref<Map<string, ConnectedDevice>>(new Map());
 const connecting = ref(false);
-const deviceScenario = ref('必定生成');
 const promptInjectionEnabled = ref(true);
 
 const hasConnectedDevice = computed(() => devices.value.size > 0);
@@ -505,7 +502,6 @@ export function useBluetooth() {
     hasConnectedDevice,
     connectedDevices,
     allDeviceInfos,
-    deviceScenario,
     promptInjectionEnabled,
     connect,
     disconnectDevice,
@@ -514,6 +510,5 @@ export function useBluetooth() {
     sendFunctionStrength,
     sendFunctionStrengthToDevice,
     sendFunctionStrengthByDeviceNo,
-    findDeviceByDeviceNo,
   };
 }

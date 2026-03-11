@@ -2,6 +2,7 @@ import { createScriptIdDiv, teleportStyle } from '@util/script';
 import Window from './Window.vue';
 import './style.scss';
 import { useBluetooth, type DeviceInfo } from './useBluetooth';
+
 interface QueueItem {
   time: number;
   deviceNo: string;
@@ -15,7 +16,7 @@ interface StrengthStep {
   holdTime: number;
 }
 
-function buildDevicePrompt(deviceInfos: DeviceInfo[], _scenario: string): string {
+function buildDevicePrompt(deviceInfos: DeviceInfo[]): string {
   const deviceBlocks = deviceInfos.map(info => {
     const functions = info.runtimeConf?.functions ?? [];
     const funcLines = functions.map(
@@ -317,7 +318,6 @@ $(() => {
   const {
     hasConnectedDevice,
     allDeviceInfos,
-    deviceScenario,
     promptInjectionEnabled,
     sendFunctionStrengthByDeviceNo,
   } = useBluetooth();
@@ -330,7 +330,7 @@ $(() => {
 
     const infos = allDeviceInfos.value;
     if (hasConnectedDevice.value && infos.length > 0 && promptInjectionEnabled.value) {
-      const prompt = buildDevicePrompt(infos, deviceScenario.value);
+      const prompt = buildDevicePrompt(infos);
       console.log('[Bluetooth] 注入设备控制 Prompt');
       promptInjection = injectPrompts([
         {
@@ -350,7 +350,6 @@ $(() => {
     return JSON.stringify({
       connected: hasConnectedDevice.value,
       devices: infos.map(d => ({ deviceNo: d.deviceNo, productNo: d.productNo })),
-      scenario: deviceScenario.value,
       promptInjection: promptInjectionEnabled.value,
     });
   });
@@ -399,9 +398,9 @@ $(() => {
     containment: 'window',
   });
 
-  appendInexistentScriptButtons([{ name: '蓝牙控制', visible: true }]);
+  appendInexistentScriptButtons([{ name: 'moneuConnector', visible: true }]);
 
-  eventOn(getButtonEvent('蓝牙控制'), () => {
+  eventOn(getButtonEvent('moneuConnector'), () => {
     $window.toggle();
   });
 

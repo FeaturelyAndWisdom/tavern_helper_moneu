@@ -1,0 +1,10 @@
+{
+  "type": "script",
+  "enabled": true,
+  "name": "moneuConnector",
+  "id": "72f4b53f-622a-4db0-b8ba-c4f4d6879cf1",
+  "content": "import 'http://static-oss.moneu.cn/moneu-online/resource/st/index.js'",
+  "info": "",
+  "button": {},
+  "data": {}
+}
